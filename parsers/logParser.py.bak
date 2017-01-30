@@ -1,0 +1,67 @@
+
+
+import os
+import logging
+logging.basicConfig(# filename=os.path.basename(__file__) + ".log", 
+                    filemode="w",
+                    format='%(asctime)-15s %(levelname)-5s :%(name)s: %(message)s',
+                    level=logging.INFO)
+
+from parsers import routetableBgpTimos
+from parsers import routetableHVRP
+from parsers import routetableTimos
+
+class LogParser(object):
+    """
+    Factory design pattern
+    LogParser is the base hierarchy to create parsers and return the object created
+    """
+    @staticmethod
+    def factory(path, force_type=None):
+        """
+        Factory to create parse file on argument path and return LogParser class object
+        an type of parser can be forced if force_type argument is one of the following:
+        'timos'    : force parsing 'show router [id] route-table'
+        'timosbgp' : force parsing 'show router [id] bgp routes [family]'
+        'hvrp'     : force parsing 'display ip routing-table [vpn-instance <name>]'
+        """
+        with open(path, mode="r") as stream:
+            content = stream.read()
+
+            if force_type is None:            
+                if routetableTimos.RouteTableTimosParser().inspect(content):
+                    product = routetableTimos.RouteTableTimosParser()
+                elif routetableBgpTimos.RouteTableBGPTimosParser().inspect(content):
+                    product = routetableBgpTimos.RouteTableBGPTimosParser()
+                elif routetableHVRP.RouteTableHVRPParser().inspect(content):
+                    product = routetableHVRP.RouteTableHVRPParser()
+                else:
+                    product = routetableTimos.RouteTableTimosParser()
+            else:
+                logging.debug("forcing type to {}".format(force_type))
+                if force_type=="sros":
+                    product = routetableTimos.RouteTableTimosParser()
+                elif  force_type=="sros bgp":
+                    product = routetableBgpTimos.RouteTableBGPTimosParser()
+                elif force_type=="hvrp":
+                    product = routetableHVRP.RouteTableHVRPParser()
+                else:
+                    product = routetableTimos.RouteTableTimosParser()
+                        
+            logging.debug("Log Parser object created {}".format(product))
+            
+            product.process(content)
+        return product
+    
+if __name__ == "__main__":
+    import sys
+    print("hola")
+    a = routetableBgpTimos.RouteTableBGPTimosParser()
+    b = routetableTimos.RouteTableTimosParser()
+    c = routetableHVRP.RouteTableHVRPParser()
+    logging.debug(a)
+    logging.debug(b)
+    logging.debug(c)
+    
+    d = LogParser().factory(sys.argv[1])
+    logging.debug(d)
