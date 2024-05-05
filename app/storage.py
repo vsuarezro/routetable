@@ -37,18 +37,20 @@ the comparison timestamps are user selectable.
 
 import sqlite3
 import datetime
-import json
+import logging
 
-route_history = {}  # Global dictionary to hold route data
+logging.basicConfig(level=logging.INFO)  # Set the default logging level to INFO
+logger = logging.getLogger(__name__)  # Get a logger for the 'storage' module
 
-database_url = ':memory:'
+default_database_url = ":memory:"
 
 # Function to initialize the database
-def _initialize_database(db_url:str = database_url):
+def _initialize_database(db_url: str = default_database_url):
     """Creates necessary tables if they don't exist"""
-    conn = sqlite3.connect(database_url) 
+    conn = sqlite3.connect(db_url)
     cursor = conn.cursor()
-    cursor.execute(''' 
+    cursor.execute(
+        """ 
         CREATE TABLE IF NOT EXISTS igp_routes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,  -- Auto-incrementing ID
             timestamp TEXT NOT NULL,
@@ -62,56 +64,90 @@ def _initialize_database(db_url:str = database_url):
             interface_next_hop TEXT,
             metric TEXT
         )
-    ''') 
-    conn.commit()  
+    """
+    )
+    conn.commit()
     return conn
 
+
 # Call the initialization function when the module is imported
-conn = _initialize_database() 
+conn = _initialize_database()
 
-def _destroy_database(database_connection :sqlite3.connect = conn):
-    conn = sqlite3.connect(database_url)
-    cursor = conn.cursor()
+
+def _destroy_database(database_connection: sqlite3.connect = conn):
+    if database_connection is None:
+        database_connection = sqlite3.connect(default_database_url)
+    cursor = database_connection.cursor()
     cursor.execute("DROP TABLE IF EXISTS igp_routes")
-    conn.commit()
-    conn.close()
+    database_connection.commit()
+    database_connection.close()
 
-def save_routes(timestamp:str, routes:list, database_connection :sqlite3.connect = conn) -> None:
+
+def save_routes(
+    timestamp: str, routes: list, database_connection: sqlite3.connect = conn
+) -> None:
     """Stores routes with a given timestamp in the SQLite database"""
     # breakpoint()
-    cursor = database_connection .cursor()
+    cursor = database_connection.cursor()
 
-    cursor.executemany("""
+    cursor.executemany(
+        """
         INSERT INTO igp_routes (timestamp, route, flags, route_type, route_protocol, age, preference, next_hop, interface_next_hop, metric) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", 
-        [(timestamp, route['route'], route['flags'], route['route_type'], route['route_protocol'], route['age'], route['preference'], route['next_hop'], route['interface_next_hop'], route['metric']) for route in routes]
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        [
+            (
+                timestamp,
+                route["route"],
+                route["flags"],
+                route["route_type"],
+                route["route_protocol"],
+                route["age"],
+                route["preference"],
+                route["next_hop"],
+                route["interface_next_hop"],
+                route["metric"],
+            )
+            for route in routes
+        ],
     )
-    database_connection .commit()
+    database_connection.commit()
     # database_connection .close() # Close the connection after saving
 
 
-def get_routes(timestamp:str, database_connection :sqlite3.connect = conn) -> list:
+def get_routes(timestamp: str, database_connection: sqlite3.connect = conn) -> list:
     """Retrieves routes for a timestamp from the SQLite database"""
-    cursor = database_connection .cursor()
+    cursor = database_connection.cursor()
 
     cursor.execute("SELECT * FROM igp_routes WHERE timestamp=?", (timestamp,))
-    results = cursor.fetchall()  
-    
-    routes = [dict(zip([column[0] for column in cursor.description], row)) for row in results]
-    
-    # database_connection .close()
-    return routes 
+    results = cursor.fetchall()
 
-def compare_routes(timestamp1:datetime, timestamp2:datetime, fields:list = ["route"], database_connection :sqlite3.connect = conn) -> dict:
-    routes1 = get_routes(timestamp1, database_connection )
-    routes2 = get_routes(timestamp2, database_connection )
+    routes = [
+        dict(zip([column[0] for column in cursor.description], row)) for row in results
+    ]
+
+    # database_connection .close()
+    return routes
+
+
+def compare_routes(
+    timestamp1: datetime,
+    timestamp2: datetime,
+    fields: list = ["route"],
+    database_connection: sqlite3.connect = conn,
+) -> dict:
+    routes1 = get_routes(timestamp1, database_connection)
+    routes2 = get_routes(timestamp2, database_connection)
 
     if routes1 is None or routes2 is None:
         return None  # Or raise an exception if timestamps are invalid
 
     # Create a dictionary of unique identifiers for routes in timestamp1
-    unique_identifiers1 = {get_unique_identifier(route,fields): route for route in routes1}
-    unique_identifiers2 = {get_unique_identifier(route,fields): route for route in routes2}
+    unique_identifiers1 = {
+        get_unique_identifier(route, fields): route for route in routes1
+    }
+    unique_identifiers2 = {
+        get_unique_identifier(route, fields): route for route in routes2
+    }
 
     # Iterate over unique identifiers in timestamp1 and compare with timestamp2
     added_routes = []
@@ -122,22 +158,33 @@ def compare_routes(timestamp1:datetime, timestamp2:datetime, fields:list = ["rou
             removed_routes.append(unique_identifiers1[unique_identifier])
 
     # Find added routes by checking for unique identifiers in timestamp2 that are not in timestamp1
-    added_routes = [route for route in routes2 if get_unique_identifier(route,fields) not in unique_identifiers1]
+    added_routes = [
+        route
+        for route in routes2
+        if get_unique_identifier(route, fields) not in unique_identifiers1
+    ]
 
     return {
-        'added': added_routes,
-        'removed': removed_routes,
+        "added": added_routes,
+        "removed": removed_routes,
     }
 
-def changed_routes(timestamp1:datetime, timestamp2:datetime, fields:list = ["route"], database_connection :sqlite3.connect = conn) -> dict:
-    routes1 = get_routes(timestamp1, database_connection )
-    routes2 = get_routes(timestamp2, database_connection )
+
+def changed_routes(
+    timestamp1: datetime,
+    timestamp2: datetime,
+    fields: list = ["route"],
+    database_connection: sqlite3.connect = conn,
+) -> dict:
+    routes1 = get_routes(timestamp1, database_connection)
+    routes2 = get_routes(timestamp2, database_connection)
 
     if routes1 is None or routes2 is None:
         return None  # Or raise an exception if timestamps are invalid
 
     cursor = database_connection.cursor()
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT 
             r1.route, 
             r1.next_hop AS next_hop_before, r2.next_hop AS next_hop_after,
@@ -155,15 +202,19 @@ def changed_routes(timestamp1:datetime, timestamp2:datetime, fields:list = ["rou
             (r1.next_hop != r2.next_hop OR 
             r1.metric != r2.metric OR 
             r1.route_protocol != r2.route_protocol)
-    """, (timestamp1, timestamp2))
+    """,
+        (timestamp1, timestamp2),
+    )
 
-    changed_routes = [dict(zip([column[0] for column in cursor.description], row)) for row in cursor.fetchall()]
+    changed_routes = [
+        dict(zip([column[0] for column in cursor.description], row))
+        for row in cursor.fetchall()
+    ]
 
-    return {
-        'changed': changed_routes
-    }
+    return {"changed": changed_routes}
 
-def get_unique_identifier(route:dict, fields: list = None) -> str:
+
+def get_unique_identifier(route: dict, fields: list = None) -> str:
     """Generates a unique identifier for a route based on the specified fields.
 
     Args:
@@ -182,5 +233,3 @@ def get_unique_identifier(route:dict, fields: list = None) -> str:
 
     # Generate the identifier string
     return f"{'-'.join([str(route[field]) for field in fields])}"
-
-
