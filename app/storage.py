@@ -53,7 +53,9 @@ def _initialize_database(db_url: str = default_database_url):
         """ 
         CREATE TABLE IF NOT EXISTS igp_routes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,  -- Auto-incrementing ID
-            timestamp TEXT NOT NULL,
+            hostname TEXT NOT NULL,
+            service TEXT NOT NULL,
+            timestamp TEXT NOT NULL,            
             route TEXT NOT NULL,
             flags TEXT,
             route_type TEXT,
@@ -92,10 +94,12 @@ def save_routes(
 
     cursor.executemany(
         """
-        INSERT INTO igp_routes (timestamp, route, flags, route_type, route_protocol, age, preference, next_hop, interface_next_hop, metric) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        INSERT INTO igp_routes (hostname, service, timestamp, route, flags, route_type, route_protocol, age, preference, next_hop, interface_next_hop, metric) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         [
             (
+                route["hostname"],
+                route["service"],
                 timestamp,
                 route["route"],
                 route["flags"],
@@ -114,11 +118,11 @@ def save_routes(
     # database_connection .close() # Close the connection after saving
 
 
-def get_routes(timestamp: str, database_connection: sqlite3.connect = conn) -> list:
-    """Retrieves routes for a timestamp from the SQLite database"""
+def get_routes(hostname:str, service:str, timestamp: str, database_connection: sqlite3.connect = conn) -> list:
+    """Retrieves routes for a hostname at a specific timestamp from the SQLite database"""
     cursor = database_connection.cursor()
 
-    cursor.execute("SELECT * FROM igp_routes WHERE timestamp=?", (timestamp,))
+    cursor.execute("SELECT * FROM igp_routes WHERE hostname=? AND service=? AND timestamp=?", (hostname, service, timestamp,))
     results = cursor.fetchall()
 
     routes = [
@@ -130,13 +134,15 @@ def get_routes(timestamp: str, database_connection: sqlite3.connect = conn) -> l
 
 
 def compare_routes(
+    hostname: str,
+    service: str,
     timestamp1: datetime,
     timestamp2: datetime,
     fields: list = ["route"],
     database_connection: sqlite3.connect = conn,
 ) -> dict:
-    routes1 = get_routes(timestamp1, database_connection)
-    routes2 = get_routes(timestamp2, database_connection)
+    routes1 = get_routes(hostname, service, timestamp1, database_connection)
+    routes2 = get_routes(hostname, service, timestamp2, database_connection)
 
     if routes1 is None or routes2 is None:
         return None  # Or raise an exception if timestamps are invalid
@@ -152,7 +158,6 @@ def compare_routes(
     # Iterate over unique identifiers in timestamp1 and compare with timestamp2
     added_routes = []
     removed_routes = []
-    changed_routes = []
     for unique_identifier in unique_identifiers1:
         if unique_identifier not in unique_identifiers2:
             removed_routes.append(unique_identifiers1[unique_identifier])
@@ -171,13 +176,15 @@ def compare_routes(
 
 
 def changed_routes(
+    hostname:str, 
+    service:str,
     timestamp1: datetime,
     timestamp2: datetime,
     fields: list = ["route"],
     database_connection: sqlite3.connect = conn,
 ) -> dict:
-    routes1 = get_routes(timestamp1, database_connection)
-    routes2 = get_routes(timestamp2, database_connection)
+    routes1 = get_routes(hostname, service, timestamp1, database_connection)
+    routes2 = get_routes(hostname, service, timestamp2, database_connection)
 
     if routes1 is None or routes2 is None:
         return None  # Or raise an exception if timestamps are invalid
@@ -197,13 +204,13 @@ def changed_routes(
         ON 
             r1.route = r2.route 
         WHERE 
-            r1.timestamp = ? AND 
-            r2.timestamp = ? AND 
+            r1.hostname = ? AND r1.service = ? AND r1.timestamp = ? AND 
+            r2.hostname = ? AND r2.service = ? AND r2.timestamp = ? AND 
             (r1.next_hop != r2.next_hop OR 
             r1.metric != r2.metric OR 
             r1.route_protocol != r2.route_protocol)
     """,
-        (timestamp1, timestamp2),
+        (hostname, service, timestamp1, hostname, service, timestamp2),
     )
 
     changed_routes = [
@@ -212,6 +219,23 @@ def changed_routes(
     ]
 
     return {"changed": changed_routes}
+
+def get_list_of_timestamps(hostname:str=None, database_connection: sqlite3.connect = conn) -> list:
+    """
+    Retrieves a list of timestamps for a given hostname from the database.
+    If hostname is None, generate the list for all hostnames in the database. Order the results from newest to oldest.
+    Returns a list of unique hostname,timestamp tuples.
+    """
+    cursor = database_connection.cursor()
+    if hostname is None:
+        cursor.execute("SELECT DISTINCT hostname, timestamp FROM igp_routes ORDER BY timestamp DESC")
+    else:
+        cursor.execute("SELECT DISTINCT hostname, timestamp FROM igp_routes WHERE hostname=? ORDER BY timestamp DESC", (hostname,))
+
+    results = cursor.fetchall()
+
+    return results
+
 
 
 def get_unique_identifier(route: dict, fields: list = None) -> str:
