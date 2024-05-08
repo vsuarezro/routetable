@@ -141,6 +141,24 @@ def compare_routes(
     fields: list = ["route"],
     database_connection: sqlite3.connect = conn,
 ) -> dict:
+
+    added_deleted_routes_dict = get_added_deleted_routes(hostname, service, timestamp1, timestamp2, database_connection)
+    changed_routes_dict = changed_routes(hostname, service, timestamp1, timestamp2, database_connection)
+    compared_routes = dict()
+    compared_routes["added"] = added_deleted_routes_dict["added"]
+    compared_routes["deleted"] = added_deleted_routes_dict["deleted"]
+    compared_routes["changed"] = changed_routes_dict["changed"]
+
+    return compared_routes
+
+def get_added_deleted_routes(
+    hostname: str,
+    service: str,
+    timestamp1: datetime,
+    timestamp2: datetime,
+    fields: list = ["route"],
+    database_connection: sqlite3.connect = conn,
+) -> dict:
     routes1 = get_routes(hostname, service, timestamp1, database_connection)
     routes2 = get_routes(hostname, service, timestamp2, database_connection)
 
@@ -228,9 +246,9 @@ def get_list_of_timestamps(hostname:str=None, database_connection: sqlite3.conne
     """
     cursor = database_connection.cursor()
     if hostname is None:
-        cursor.execute("SELECT DISTINCT hostname, timestamp FROM igp_routes ORDER BY timestamp DESC")
+        cursor.execute("SELECT DISTINCT hostname, service, timestamp FROM igp_routes ORDER BY timestamp DESC")
     else:
-        cursor.execute("SELECT DISTINCT hostname, timestamp FROM igp_routes WHERE hostname=? ORDER BY timestamp DESC", (hostname,))
+        cursor.execute("SELECT DISTINCT hostname, service, timestamp FROM igp_routes WHERE hostname=? ORDER BY timestamp DESC", (hostname,))
 
     results = cursor.fetchall()
 

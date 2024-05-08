@@ -1,4 +1,7 @@
 import sqlite3
+import time 
+import random
+import copy
 
 import pytest
 import app.storage as storage
@@ -259,7 +262,7 @@ def test_added_route_detection(test_db: sqlite3.Connection):
     storage.save_routes(timestamp2, initial_routes + [new_route], database_connection =test_db) 
 
     # Comparison
-    result = storage.compare_routes(hostname, service, timestamp1, timestamp2, database_connection =test_db)
+    result = storage.get_added_deleted_routes(hostname, service, timestamp1, timestamp2, database_connection =test_db)
 
     assert len(result['added']) == 1 
     assert result['added'][0]["route"] == new_route["route"]
@@ -323,7 +326,7 @@ def test_removed_route_detection(initial_routes, later_routes, removed_route):
     storage.save_routes(timestamp2, later_routes, database_connection=database_connection) 
 
     # Comparison
-    result = storage.compare_routes(hostname, service, timestamp1, timestamp2, database_connection=database_connection)
+    result = storage.get_added_deleted_routes(hostname, service, timestamp1, timestamp2, database_connection=database_connection)
 
     assert len(result['removed']) == 1 
     assert result['removed'][0]["route"] == removed_route["route"]
@@ -331,10 +334,6 @@ def test_removed_route_detection(initial_routes, later_routes, removed_route):
     # destroy database when test case ends
     storage._destroy_database(database_connection)
 
-
-import time 
-import random
-import copy
 
 def generate_test_route(route_prefix):
     """Generates a sample route dictionary.""" 
@@ -362,7 +361,7 @@ def generate_unique_routes_list(num_routes):
     return random.sample(population, num_routes)
 
 
-@pytest.mark.parametrize("num_routes", [10000, ])  # Adjust the number for your test
+@pytest.mark.parametrize("num_routes", [10000, ])
 def test_large_scale_comparison(num_routes):
     timestamp1 = "2024-05-09_08:00"
     timestamp2 = "2024-05-09_08:15"
@@ -391,7 +390,7 @@ def test_large_scale_comparison(num_routes):
 
     # Benchmarking
     start_time = time.time()
-    result = storage.compare_routes(hostname, service, timestamp1, timestamp2, database_connection=database_connection)
+    result = storage.get_added_deleted_routes(hostname, service, timestamp1, timestamp2, database_connection=database_connection)
     compare_time = time.time() - start_time
 
     start_changed = time.time()
@@ -477,9 +476,12 @@ def test_get_list_of_timestamps(routes):
     storage.save_routes(timestamps[1], routes, database_connection=database_connection)
     storage.save_routes(timestamps[2], routes, database_connection=database_connection)
     
-    expected_timestamps = [("HOSTNAME1","2024-05-08_16:23",), ("HOSTNAME2","2024-05-08_16:23",), 
-                           ("HOSTNAME1","2024-05-08_16:22",), ("HOSTNAME2","2024-05-08_16:22",),
-                           ("HOSTNAME1","2024-05-08_16:21",), ("HOSTNAME2","2024-05-08_16:21",),
+    expected_timestamps = [("HOSTNAME1","SERVICE1","2024-05-08_16:23",), 
+                           ("HOSTNAME2","SERVICE1","2024-05-08_16:23",), 
+                           ("HOSTNAME1","SERVICE1","2024-05-08_16:22",), 
+                           ("HOSTNAME2","SERVICE1","2024-05-08_16:22",),
+                           ("HOSTNAME1","SERVICE1","2024-05-08_16:21",), 
+                           ("HOSTNAME2","SERVICE1","2024-05-08_16:21",),
                         ]
     # Retrieve the list of timestamps
     retrieved_timestamps = storage.get_list_of_timestamps(database_connection=database_connection)
@@ -491,7 +493,7 @@ def test_get_list_of_timestamps(routes):
 
 
 
-some_routes = [
+ROUTES_TEST = [
                 {
                     "hostname": "HOSTNAME1", "service": "SERVICE1",
                     "route": "1.1.1.10/32", "flags": "B",
@@ -533,7 +535,7 @@ some_routes = [
     [
         # Test case 1: first host routes
         (
-            some_routes,
+            ROUTES_TEST,
             "HOSTNAME1",
             "SERVICE1",
             "2024-05-08_16:21",
@@ -543,7 +545,7 @@ some_routes = [
         ),
         # Test case 2: second host routes
         (
-            some_routes,
+            ROUTES_TEST,
             "HOSTNAME2",
             "SERVICE2",
             "2024-05-08_16:21",
@@ -553,7 +555,7 @@ some_routes = [
         ),
         # Test case 3: host not found
         (
-            some_routes,
+            ROUTES_TEST,
             "HOSTNAME3",
             "SERVICE1",
             "2024-05-08_16:21",
@@ -563,7 +565,7 @@ some_routes = [
         ),
         # Test case 4: service not found
         (
-            some_routes,
+            ROUTES_TEST,
             "HOSTNAME1",
             "SERVICE3",
             "2024-05-08_16:21",
@@ -573,7 +575,7 @@ some_routes = [
         ),
         # Test case 5: timestamp not found
         (
-            some_routes,
+            ROUTES_TEST,
             "HOSTNAME1",
             "SERVICE1",
             "2024-05-08_16:22",
