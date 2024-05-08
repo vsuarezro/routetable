@@ -14,6 +14,8 @@ def test_save_routes(test_db: sqlite3.Connection):
     timestamp = '2024-05-08_16:21'
     routes = [
         {
+            "hostname" : "HOSTNAME1",
+            "service" : "SERVICE1",
             "route": "1.1.1.1/32",
             "flags": "B",
             "route_type": "Remote",
@@ -25,6 +27,8 @@ def test_save_routes(test_db: sqlite3.Connection):
             "metric": "100"
         },
         {
+            "hostname" : "HOSTNAME1",
+            "service" : "SERVICE1",
             "route": "2.2.2.2/32",
             "flags": "L",
             "route_type": "Local",
@@ -36,18 +40,24 @@ def test_save_routes(test_db: sqlite3.Connection):
             "metric": "100112222"
         }
     ]
-
+    hostname = "HOSTNAME1"
+    service = "SERVICE1"
+    # Save the routes
     storage.save_routes(timestamp, routes, test_db)
 
     # Assertion: Check if the routes were saved correctly
     cursor = test_db.cursor()
-    count = cursor.execute("SELECT COUNT(*) FROM igp_routes WHERE timestamp=?", (timestamp,)).fetchone()[0]
+    count = cursor.execute("SELECT COUNT(*) FROM igp_routes WHERE hostname=? AND service=? AND timestamp=?", (hostname, service, timestamp,)).fetchone()[0]
     assert count == len(routes)
 
 def test_save_and_get_routes(test_db: sqlite3.Connection):
     timestamp = "2024-05-06_10:31"
+    hostname = "HOSTNAME1"
+    service = "SERVICE1"
     routes = [
         {
+            "hostname" : "HOSTNAME1",
+            "service" : "SERVICE1",
             "route": "1.1.1.10/32",
             "flags": "B",
             "route_type": "Remote",
@@ -59,6 +69,8 @@ def test_save_and_get_routes(test_db: sqlite3.Connection):
             "metric": "100"
         },
         {
+            "hostname" : "HOSTNAME1",
+            "service" : "SERVICE1",
             "route": "2.2.2.20/32",
             "flags": "L",
             "route_type": "Local",
@@ -75,9 +87,11 @@ def test_save_and_get_routes(test_db: sqlite3.Connection):
     storage.save_routes(timestamp, routes, database_connection =test_db)
 
     # Retrieve a specific route (e.g., the first one)
-    retrieved_route = storage.get_routes(timestamp, database_connection =test_db)[0]  
+    retrieved_route = storage.get_routes(hostname, service, timestamp, database_connection=test_db)[0]  
 
     # Assertion: Compare relevant fields
+    assert retrieved_route['hostname'] == routes[0]['hostname']
+    assert retrieved_route['service'] == routes[0]['service']
     assert retrieved_route['route'] == routes[0]['route']
     assert retrieved_route['flags'] == routes[0]['flags']
     assert retrieved_route['route_type'] == routes[0]['route_type']
@@ -105,12 +119,14 @@ def test_get_unique_identifier():
     [
         # Test case 1: next_hop change 
         (
-            {"route": "10.0.0.0/24", "next_hop": "10.10.10.1", 
+            {"hostname" : "HOSTNAME1", "service" : "SERVICE1",
+             "route": "10.0.0.0/24", "next_hop": "10.10.10.1", 
              "flags": "L", "route_type": "Local", 
              "route_protocol": "ISIS", "age": "00h08m44s",
              "interface_next_hop": None, "metric": "100112222", "preference": "170"
             }, 
-            {"route": "10.0.0.0/24", "next_hop": "10.10.20.1", 
+            {"hostname" : "HOSTNAME1", "service" : "SERVICE1",
+             "route": "10.0.0.0/24", "next_hop": "10.10.20.1", 
              "flags": "L", "route_type": "Local", 
              "route_protocol": "ISIS", "age": "00h08m44s",
              "interface_next_hop": None, "metric": "100112222", "preference": "170"
@@ -121,12 +137,14 @@ def test_get_unique_identifier():
         ),  
         # Test case 2: metric change
         (
-            {"route": "10.0.0.0/24", "next_hop": "10.10.10.1", 
+            {"hostname" : "HOSTNAME1", "service" : "SERVICE1",
+             "route": "10.0.0.0/24", "next_hop": "10.10.10.1", 
              "flags": "L", "route_type": "Local", 
              "route_protocol": "ISIS", "age": "00h08m44s",
              "interface_next_hop": None, "metric": "100",  "preference": "170"
             }, 
-            {"route": "10.0.0.0/24", "next_hop": "10.10.10.1", 
+            {"hostname" : "HOSTNAME1", "service" : "SERVICE1",
+             "route": "10.0.0.0/24", "next_hop": "10.10.10.1", 
              "flags": "L", "route_type": "Local", 
              "route_protocol": "ISIS", "age": "00h08m44s",
              "interface_next_hop": None, "metric": "110", "preference": "170"
@@ -137,12 +155,14 @@ def test_get_unique_identifier():
         ),
         # Test case 3: protocol change
         (
-            {"route": "10.0.0.0/24", "next_hop": "10.10.10.1", 
+            {"hostname" : "HOSTNAME1", "service" : "SERVICE1",
+             "route": "10.0.0.0/24", "next_hop": "10.10.10.1", 
              "flags": "L", "route_type": "Local", 
              "route_protocol": "ISIS", "age": "00h08m44s",
              "interface_next_hop": None, "metric": "100", "preference": "170"
             }, 
-            {"route": "10.0.0.0/24", "next_hop": "10.10.10.1", 
+            {"hostname" : "HOSTNAME1", "service" : "SERVICE1",
+             "route": "10.0.0.0/24", "next_hop": "10.10.10.1", 
              "flags": "L", "route_type": "Local", 
              "route_protocol": "BGP_LABEL", "age": "00h08m44s",
              "interface_next_hop": None, "metric": "100", "preference": "170"
@@ -158,6 +178,10 @@ def test_get_unique_identifier():
 def test_route_change_detection(route_data, modified_route_data, expected_key_change, key_before, key_after):
     timestamp1 = '2024-05-08_16:20'
     timestamp2 = '2024-05-08_16:35'  # Later timestamp
+    hostname = "HOSTNAME1"
+    service = "SERVICE1"
+
+    # Initialize the database connection
     database_connection = storage._initialize_database(":memory:")
 
     # Save the routes for both timestamps (initially the same)
@@ -165,7 +189,7 @@ def test_route_change_detection(route_data, modified_route_data, expected_key_ch
     storage.save_routes(timestamp2, [modified_route_data], database_connection=database_connection) 
 
     # Perform comparison
-    comparison_result = storage.changed_routes(timestamp1, timestamp2, database_connection=database_connection)
+    comparison_result = storage.changed_routes(hostname, service, timestamp1, timestamp2, database_connection=database_connection)
     
     # Validate the expected field is present
     assert expected_key_change in route_data
@@ -186,6 +210,8 @@ def test_added_route_detection(test_db: sqlite3.Connection):
 
     initial_routes = [
         {
+            "hostname": "HOSTNAME1",
+            "service" : "SERVICE1",
             "route": "1.1.1.10/32",
             "flags": "B",
             "route_type": "Remote",
@@ -197,6 +223,8 @@ def test_added_route_detection(test_db: sqlite3.Connection):
             "metric": "100"
         },
         {
+            "hostname": "HOSTNAME1",
+            "service" : "SERVICE1",
             "route": "2.2.2.20/32",
             "flags": "L",
             "route_type": "Local",
@@ -210,6 +238,8 @@ def test_added_route_detection(test_db: sqlite3.Connection):
     ]
 
     new_route = {
+            "hostname": "HOSTNAME1",
+            "service" : "SERVICE1",
             "route": "2.2.2.30/32",
             "flags": "L",
             "route_type": "Local",
@@ -221,12 +251,15 @@ def test_added_route_detection(test_db: sqlite3.Connection):
             "metric": "100112222"
         }
 
+    hostname = "HOSTNAME1"
+    service = "SERVICE1"
+
     # Save data
     storage.save_routes(timestamp1, initial_routes, database_connection =test_db)
     storage.save_routes(timestamp2, initial_routes + [new_route], database_connection =test_db) 
 
     # Comparison
-    result = storage.compare_routes(timestamp1, timestamp2, database_connection =test_db)
+    result = storage.compare_routes(hostname, service, timestamp1, timestamp2, database_connection =test_db)
 
     assert len(result['added']) == 1 
     assert result['added'][0]["route"] == new_route["route"]
@@ -238,6 +271,7 @@ def test_added_route_detection(test_db: sqlite3.Connection):
         (
             [
                 {
+                    "hostname": "HOSTNAME1", "service" : "SERVICE1",
                     "route": "1.1.1.10/32", "flags": "B",
                     "route_type": "Remote", "route_protocol": "BGP_LABEL",
                     "age": "10h49m31s", "preference": "170",
@@ -245,6 +279,7 @@ def test_added_route_detection(test_db: sqlite3.Connection):
                     "metric": "100"
                 },
                 {
+                    "hostname": "HOSTNAME1", "service" : "SERVICE1",
                     "route": "2.2.2.20/32", "flags": "L",
                     "route_type": "Local", "route_protocol": "ISIS",
                     "age": "00h08m44s", "preference": "18",
@@ -254,6 +289,7 @@ def test_added_route_detection(test_db: sqlite3.Connection):
             ],
             [ 
                 {
+                    "hostname": "HOSTNAME1", "service" : "SERVICE1",
                     "route": "2.2.2.20/32", "flags": "L",
                     "route_type": "Local", "route_protocol": "ISIS",
                     "age": "00h08m44s", "preference": "18",
@@ -262,6 +298,7 @@ def test_added_route_detection(test_db: sqlite3.Connection):
                 }
             ],
             {
+                "hostname": "HOSTNAME1","service" : "SERVICE1",
                 "route": "1.1.1.10/32", "flags": "B",
                 "route_type": "Remote", "route_protocol": "BGP_LABEL",
                 "age": "10h49m31s", "preference": "170",
@@ -275,6 +312,10 @@ def test_added_route_detection(test_db: sqlite3.Connection):
 def test_removed_route_detection(initial_routes, later_routes, removed_route):
     timestamp1 = '2024-05-09_08:30'
     timestamp2 = '2024-05-09_09:15' 
+    hostname = "HOSTNAME1"
+    service = "SERVICE1"
+
+    # Initialize database
     database_connection = storage._initialize_database(":memory:")
 
     # Save data
@@ -282,7 +323,7 @@ def test_removed_route_detection(initial_routes, later_routes, removed_route):
     storage.save_routes(timestamp2, later_routes, database_connection=database_connection) 
 
     # Comparison
-    result = storage.compare_routes(timestamp1, timestamp2, database_connection=database_connection)
+    result = storage.compare_routes(hostname, service, timestamp1, timestamp2, database_connection=database_connection)
 
     assert len(result['removed']) == 1 
     assert result['removed'][0]["route"] == removed_route["route"]
@@ -298,6 +339,8 @@ import copy
 def generate_test_route(route_prefix):
     """Generates a sample route dictionary.""" 
     return {
+        "hostname": f"HOSTNAME1",
+        "service": f"SERVICE1",
         "route": f"{route_prefix}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}/{random.randint(1, 32)}",
         "flags": random.choice(["B", "L"]),
         "route_type" : random.choice(["Local", "Remote", "Blackh*"]),
@@ -309,21 +352,33 @@ def generate_test_route(route_prefix):
         "metric": f"{random.randint(1, 19999)}",
     }
 
-@pytest.mark.parametrize("num_routes", [10000])  # Adjust the number for your test
+def generate_unique_routes_list(num_routes):
+    """Generates a list of unique routes."""
+    print(num_routes)
+    population = [generate_test_route(random.choice([10, 20, 30, 40, 50])) for _ in range(int(num_routes / 4))]
+    population.extend(generate_test_route(random.choice([10, 20, 30, 40, 50])) for _ in range(int(num_routes / 4)))
+    population.extend(generate_test_route(random.choice([10, 20, 30, 40, 50])) for _ in range(int(num_routes / 4)))
+    population.extend(generate_test_route(random.choice([10, 20, 30, 40, 50])) for _ in range(int(num_routes / 4)))
+    return random.sample(population, num_routes)
+
+
+@pytest.mark.parametrize("num_routes", [10000, ])  # Adjust the number for your test
 def test_large_scale_comparison(num_routes):
     timestamp1 = "2024-05-09_08:00"
     timestamp2 = "2024-05-09_08:15"
+    hostname = "HOSTNAME1"
+    service = "SERVICE1"
     database_connection = storage._initialize_database(":memory:")
 
     # Generate routes 
-    initial_routes = [generate_test_route("10") for _ in range(num_routes)]
+    initial_routes = generate_unique_routes_list(num_routes)
     # Deep Copy 
     later_routes = copy.deepcopy(initial_routes) 
     later_routes = later_routes[:-10]  # Simulate 10 removed routes
     later_routes[-1]["next_hop"] = "TO_HOSTNAME3" # Simulate a change in a next_hop
     later_routes[-2]["metric"] = "20000" # Simulate a change in a metric
     later_routes[0]["route_protocol"] = "OTHER" # Simulate a change in a route_protocol
-    later_routes.extend( [generate_test_route("20") for _ in range(10)] ) # Simulate 10 new route
+    later_routes.extend( [generate_test_route("1") for _ in range(10)] ) # Simulate 10 new route, e.g. 1.1.1.10/32
 
     # Store routes
     start_save_time1 = time.time()
@@ -336,15 +391,14 @@ def test_large_scale_comparison(num_routes):
 
     # Benchmarking
     start_time = time.time()
-    result = storage.compare_routes(timestamp1, timestamp2, database_connection=database_connection)
+    result = storage.compare_routes(hostname, service, timestamp1, timestamp2, database_connection=database_connection)
     compare_time = time.time() - start_time
 
     start_changed = time.time()
-    changed_results = storage.changed_routes(timestamp1, timestamp2, database_connection=database_connection)
+    changed_results = storage.changed_routes(hostname, service, timestamp1, timestamp2, database_connection=database_connection)
     changed_time = time.time() - start_changed
 
-    # breakpoint()
-    # Assertions (adjust if needed)
+    # Assertions
     assert len(result['removed']) == 10  
     assert len(result['added']) == 10
     assert len(changed_results['changed']) == 3
@@ -356,4 +410,195 @@ def test_large_scale_comparison(num_routes):
     print(f"Total changed_routes time: {changed_time:.4f} seconds")
 
     # destroy database when test case ends
+    storage._destroy_database(database_connection)
+
+
+
+@pytest.mark.parametrize(
+    "routes",
+    [
+        (
+            [
+                {
+                    "hostname": "HOSTNAME1", "service": "SERVICE1",
+                    "route": "1.1.1.10/32", "flags": "B",
+                    "route_type": "Remote", "route_protocol": "BGP_LABEL",
+                    "age": "10h49m31s", "preference": "170",
+                    "next_hop": "10.20.30.40", "interface_next_hop": "tunneled:SR-ISIS:530001",
+                    "metric": "100"
+                },
+                {
+                    "hostname": "HOSTNAME1","service": "SERVICE1",
+                    "route": "2.2.2.20/32", "flags": "L",
+                    "route_type": "Local", "route_protocol": "ISIS",
+                    "age": "00h08m44s", "preference": "18",
+                    "next_hop": "10.190.144.128", "interface_next_hop": None,
+                    "metric": "100112222"
+                },
+                {
+                    "hostname": "HOSTNAME1", "service": "SERVICE1",
+                    "route": "2.2.2.21/32", "flags": "L",
+                    "route_type": "Local", "route_protocol": "ISIS",
+                    "age": "00h08m44s", "preference": "18",
+                    "next_hop": "10.190.144.128", "interface_next_hop": None,
+                    "metric": "100112222"
+                },
+                {
+                    "hostname": "HOSTNAME2", "service": "SERVICE1",
+                    "route": "2.2.2.21/32", "flags": "L",
+                    "route_type": "Local", "route_protocol": "ISIS",
+                    "age": "00h08m44s", "preference": "18",
+                    "next_hop": "10.190.144.128", "interface_next_hop": None,
+                    "metric": "100112222"
+                }
+            ]
+
+        ),
+        # Add more test cases with different routes being removed
+    ]
+)
+def test_get_list_of_timestamps(routes):
+    """
+    Test storage.get_list_of_timestamps
+    save routes to the database with different timestamps
+    Retrive the list of timestamps from the database using storage.get_list_of_timestamps
+    Assert the list of timestamps is correct
+    """
+    # Save routes with different timestamps
+    timestamps = [
+        "2024-05-08_16:21",
+        "2024-05-08_16:22",
+        "2024-05-08_16:23",
+    ]
+    # Initialize the database
+    database_connection = storage._initialize_database(":memory:")
+
+    storage.save_routes(timestamps[0], routes, database_connection=database_connection)
+    storage.save_routes(timestamps[1], routes, database_connection=database_connection)
+    storage.save_routes(timestamps[2], routes, database_connection=database_connection)
+    
+    expected_timestamps = [("HOSTNAME1","2024-05-08_16:23",), ("HOSTNAME2","2024-05-08_16:23",), 
+                           ("HOSTNAME1","2024-05-08_16:22",), ("HOSTNAME2","2024-05-08_16:22",),
+                           ("HOSTNAME1","2024-05-08_16:21",), ("HOSTNAME2","2024-05-08_16:21",),
+                        ]
+    # Retrieve the list of timestamps
+    retrieved_timestamps = storage.get_list_of_timestamps(database_connection=database_connection)
+
+    assert retrieved_timestamps == expected_timestamps
+
+    # Destroy database when test case ends
+    storage._destroy_database(database_connection)
+
+
+
+some_routes = [
+                {
+                    "hostname": "HOSTNAME1", "service": "SERVICE1",
+                    "route": "1.1.1.10/32", "flags": "B",
+                    "route_type": "Remote", "route_protocol": "BGP_LABEL",
+                    "age": "10h49m31s", "preference": "170",
+                    "next_hop": "10.20.30.40", "interface_next_hop": "tunneled:SR-ISIS:530001",
+                    "metric": "100"
+                },
+                {
+                    "hostname": "HOSTNAME1","service": "SERVICE1",
+                    "route": "2.2.2.20/32", "flags": "L",
+                    "route_type": "Local", "route_protocol": "ISIS",
+                    "age": "00h08m44s", "preference": "18",
+                    "next_hop": "10.190.144.128", "interface_next_hop": None,
+                    "metric": "100112222"
+                },
+                {
+                    "hostname": "HOSTNAME1", "service": "SERVICE1",
+                    "route": "2.2.2.21/32", "flags": "L",
+                    "route_type": "Local", "route_protocol": "ISIS",
+                    "age": "00h08m44s", "preference": "18",
+                    "next_hop": "10.190.144.128", "interface_next_hop": None,
+                    "metric": "100112222"
+                },
+                {
+                    "hostname": "HOSTNAME2", "service": "SERVICE2",
+                    "route": "2.2.2.21/32", "flags": "L",
+                    "route_type": "Local", "route_protocol": "ISIS",
+                    "age": "00h08m44s", "preference": "18",
+                    "next_hop": "10.190.144.128", "interface_next_hop": None,
+                    "metric": "100112222"
+                }
+            ]
+
+
+
+@pytest.mark.parametrize(
+    "routes, hostname, service, timestamp_to_save, timestamp_to_get, expected_number_of_routes, expected_routes",
+    [
+        # Test case 1: first host routes
+        (
+            some_routes,
+            "HOSTNAME1",
+            "SERVICE1",
+            "2024-05-08_16:21",
+            "2024-05-08_16:21",
+            3,
+            ["1.1.1.10/32", "2.2.2.20/32", "2.2.2.21/32"]
+        ),
+        # Test case 2: second host routes
+        (
+            some_routes,
+            "HOSTNAME2",
+            "SERVICE2",
+            "2024-05-08_16:21",
+            "2024-05-08_16:21",
+            1,
+            ["2.2.2.21/32"]
+        ),
+        # Test case 3: host not found
+        (
+            some_routes,
+            "HOSTNAME3",
+            "SERVICE1",
+            "2024-05-08_16:21",
+            "2024-05-08_16:21",
+            0,
+            []
+        ),
+        # Test case 4: service not found
+        (
+            some_routes,
+            "HOSTNAME1",
+            "SERVICE3",
+            "2024-05-08_16:21",
+            "2024-05-08_16:21",
+            0,
+            []
+        ),
+        # Test case 5: timestamp not found
+        (
+            some_routes,
+            "HOSTNAME1",
+            "SERVICE1",
+            "2024-05-08_16:22",
+            "2024-05-08_16:21",
+            0,
+            []
+        ),
+    ]   
+)
+
+def test_get_routes_when_more_than_one_hostname_and_service(routes, hostname, service, timestamp_to_save, timestamp_to_get, expected_number_of_routes, expected_routes):
+    """
+    Test storage.get_routes under diffenrent conditions when more than one host is saved
+    """
+    # Initialize the database
+    database_connection = storage._initialize_database(":memory:")
+
+    storage.save_routes(timestamp_to_save, routes, database_connection=database_connection)
+
+    # Retrieve the routes
+    retrieved_routes = storage.get_routes(hostname, service, timestamp_to_get, database_connection=database_connection)
+
+    assert len(retrieved_routes) == expected_number_of_routes
+    assert [route_item["route"] for route_item in retrieved_routes ].sort() == expected_routes.sort()
+
+
+    # Destroy database when test case ends
     storage._destroy_database(database_connection)
