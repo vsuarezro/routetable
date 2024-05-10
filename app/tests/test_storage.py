@@ -493,6 +493,82 @@ def test_get_list_of_timestamps(routes):
 
 
 
+@pytest.mark.parametrize(
+    "routes",
+    [
+        (
+            [
+                {
+                    "hostname": "HOSTNAME1", "service": "SERVICE1",
+                    "route": "1.1.1.10/32", "flags": "B",
+                    "route_type": "Remote", "route_protocol": "BGP_LABEL",
+                    "age": "10h49m31s", "preference": "170",
+                    "next_hop": "10.20.30.40", "interface_next_hop": "tunneled:SR-ISIS:530001",
+                    "metric": "100"
+                },
+                {
+                    "hostname": "HOSTNAME1","service": "SERVICE1",
+                    "route": "2.2.2.20/32", "flags": "L",
+                    "route_type": "Local", "route_protocol": "ISIS",
+                    "age": "00h08m44s", "preference": "18",
+                    "next_hop": "10.190.144.128", "interface_next_hop": None,
+                    "metric": "100112222"
+                },
+                {
+                    "hostname": "HOSTNAME1", "service": "SERVICE1",
+                    "route": "2.2.2.21/32", "flags": "L",
+                    "route_type": "Local", "route_protocol": "ISIS",
+                    "age": "00h08m44s", "preference": "18",
+                    "next_hop": "10.190.144.128", "interface_next_hop": None,
+                    "metric": "100112222"
+                },
+                {
+                    "hostname": "HOSTNAME2", "service": "SERVICE1",
+                    "route": "2.2.2.21/32", "flags": "L",
+                    "route_type": "Local", "route_protocol": "ISIS",
+                    "age": "00h08m44s", "preference": "18",
+                    "next_hop": "10.190.144.128", "interface_next_hop": None,
+                    "metric": "100112222"
+                }
+            ]
+
+        ),
+        # Add more test cases with different routes being removed
+    ]
+)
+def test_get_latest_timestamps(routes):
+    """
+    Test storage.get_latest_timestamps
+    save routes to the database with different timestamps
+    Retrive the list of timestamps from the database using storage.get_latest_timestamps for a specific hostname and service
+    Assert the tuple of timestamps returned by storage.get_latest_timestamps is correct
+    """
+    # Save routes with different timestamps
+    timestamps = [
+        "2024-05-08_16:21",
+        "2024-05-08_16:22",
+        "2024-05-08_16:23",
+    ]
+    # Initialize the database
+    database_connection = storage._initialize_database(":memory:")
+
+    storage.save_routes(timestamps[0], routes, database_connection=database_connection)
+    storage.save_routes(timestamps[1], routes, database_connection=database_connection)
+    storage.save_routes(timestamps[2], routes, database_connection=database_connection)
+    
+    expected_timestamp1 = "2024-05-08_16:23" 
+    expected_timestamp2 = "2024-05-08_16:22"
+                           
+    # Retrieve the list of timestamps
+    retrieved_timestamps = storage.get_latest_timestamps("HOSTNAME1","SERVICE1", database_connection=database_connection)
+
+    assert retrieved_timestamps == (expected_timestamp1, expected_timestamp2)
+
+    # Destroy database when test case ends
+    storage._destroy_database(database_connection)
+
+
+
 ROUTES_TEST = [
                 {
                     "hostname": "HOSTNAME1", "service": "SERVICE1",

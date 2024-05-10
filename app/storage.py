@@ -38,8 +38,6 @@ the comparison timestamps are user selectable.
 import sqlite3
 import datetime
 import logging
-
-logging.basicConfig(level=logging.INFO)  # Set the default logging level to INFO
 logger = logging.getLogger(__name__)  # Get a logger for the 'storage' module
 
 default_database_url = ":memory:"
@@ -244,6 +242,11 @@ def get_list_of_timestamps(hostname:str=None, database_connection: sqlite3.conne
     If hostname is None, generate the list for all hostnames in the database. Order the results from newest to oldest.
     Returns a list of unique hostname,timestamp tuples.
     """
+    
+    if hostname:
+        logger.debug(f"Getting list of timestamps for {hostname}") 
+    else:
+        logger.debug("Getting list of timestamps for all hostnames") 
     cursor = database_connection.cursor()
     if hostname is None:
         cursor.execute("SELECT DISTINCT hostname, service, timestamp FROM igp_routes ORDER BY timestamp DESC")
@@ -254,6 +257,38 @@ def get_list_of_timestamps(hostname:str=None, database_connection: sqlite3.conne
 
     return results
 
+
+def get_latest_timestamps(hostname: str, service:str, database_connection: sqlite3.connect = conn) -> tuple:
+    """
+    Retrieves the two most recent timestamps for a given hostname and service combination from the database.
+
+    Args:
+        hostname: The hostname.
+        service: The service name
+        database_connection: The connection to the SQLite database.
+
+    Returns:
+        A tuple containing the two most recent timestamps, or None if no matching timestamps are found.
+    """
+    
+    logging.debug(f"Getting latest timestamps for {hostname} and {service}")
+    cursor = database_connection.cursor()
+    cursor.execute(
+        """
+        SELECT DISTINCT timestamp 
+        FROM igp_routes
+        WHERE hostname = ? AND service = ?
+        ORDER BY timestamp DESC
+        LIMIT 2
+        """,
+        (hostname, service),
+    )
+    results = cursor.fetchall()
+
+    if len(results) == 2:
+        return results[0][0], results[1][0]  # Extract timestamps from results
+    else:
+        return None  # Or you might want to raise an exception
 
 
 def get_unique_identifier(route: dict, fields: list = None) -> str:
