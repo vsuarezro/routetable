@@ -1,17 +1,19 @@
 import argparse
 import ipaddress as ipa
-import logging
 import os
 import re
 
-import app.orchestrator as orchestrator
-import formatter
-
+import logging
 logging.basicConfig(
     level=logging.INFO,  # Set the desired logging level
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger()
+
+import orchestrator as orchestrator
+import formatter
+
+
 
 def validate_timestamp(timestamp):
     timestamp_regex = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}:[0-9]{2}$") # e.g. 2024-05-09_08:30
@@ -24,7 +26,7 @@ def main():
     # Mutually exclusive group for 'fetch' and 'load'
     commands_group = parser.add_mutually_exclusive_group(required=True)  
     commands_group.add_argument("--fetch", help="Fetch routes from a device (IP address) or a file of devices", type=str)  # Note: nargs and const for enhanced handling
-    commands_group.add_argument("--load", nargs=2, metavar=("FILENAME", "TIMESTAMP"), help="Load routes from a file with a timestamp")
+    commands_group.add_argument("--load", nargs=4, metavar=("FILENAME", "HOSTNAME", "TIMESTAMP", "VENDOR"), help="Load routes from a file with a timestamp")
     commands_group.add_argument("--list", nargs='?', metavar="HOSTNAME", const='all', help="List available timestamps (optionally filter by hostname)", type=str) 
     commands_group.add_argument("--compare", nargs=4, metavar=("HOSTNAME", "SERVICE", "TIMESTAMP1", "TIMESTAMP2" ), help="Compare routes between timestamps")
 
@@ -47,8 +49,14 @@ def main():
     # Configure logging based on arguments
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
+        logger.setLevel(logging.DEBUG)
     elif args.quiet: 
         logging.basicConfig(level=logging.CRITICAL)
+        logger.setLevel(logging.CRITICAL)
+    else:
+        logging.basicConfig(level=logging.INFO)
+        logger.setLevel(logging.INFO)
+
 
     if args.list == 'all':
         timestamp_list = orchestrator.list_timestamps()
@@ -56,7 +64,7 @@ def main():
             logging.warning("No timestamps found")
             return
         for timestamp in timestamp_list:
-            print(timestamp.join(","))
+            print(" ".join(timestamp))
         return
     elif args.list:
         timestamp_list = orchestrator.list_timestamps(args.list)
@@ -64,7 +72,7 @@ def main():
             logging.warning(f"No timestamps found for {args.list}")
             return
         for timestamp in timestamp_list:
-            print(timestamp.join(","))
+            print(" ".join(timestamp))
         return
     
     if args.fetch:
@@ -82,14 +90,14 @@ def main():
             logging.error(f"{args.fetch} is not a valid IP address or file")
             return
     if args.load:
-        filename, timestamp = args.load
+        filename, hostname, timestamp, vendor = args.load
         if not validate_timestamp(timestamp):
             logging.error(f"{timestamp} is not a valid timestamp. format is YYYY-MM-DD_HH:MM")
             return
         if not os.path.isfile(filename):
             logging.error(f"{filename} does not exist")
             return
-        orchestrator.load_routes_from_file(filename, timestamp)
+        orchestrator.load_routes_from_file(filename, hostname, timestamp, vendor)
         logging.info(f"Loaded routes from {filename} at {timestamp}")
         return
     if args.compare:
@@ -112,7 +120,7 @@ def main():
             logging.error("No routes found")
             return
         output_formatter = formatter.fommatter_function.get(args.output)
-        print(output_formatter(routes_comparison))
+        print(output_formatter(routes_comparison,hostname, service, timestamp1, timestamp2))
         return
 
 
