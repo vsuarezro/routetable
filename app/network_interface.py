@@ -1,12 +1,18 @@
+"""
+
+
+
+"""
+
+
 from threading import Thread, get_native_id
 from multiprocessing.pool import ThreadPool
 from queue import Queue
 
 import os
 import logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-logger.info(f"Starting {os.path.basename(__file__)}",)
+logger.debug(f"Starting {os.path.basename(__file__)}",)
 
 from time import sleep
 from random import random
@@ -166,8 +172,9 @@ def producer_task(devices_queue, output_queue):
             logger.debug(f">Producer {get_native_id()} hostname: {hostname}, ip: {device_dict.get('ip')}, command: {command}")
             RESPONSE_DICT["output"][command] = get_output(net_connect_generic_pe, command)
         else:
-            queue.put(RESPONSE_DICT)
             logger.info(f">Producer {get_native_id()} processed commands for hostname: {hostname}, ip: {device_dict.get('ip')}")
+            output_queue.put(RESPONSE_DICT)
+            
 
 # producer manager task
 def producer_manager(number_of_threads:int, devices_queue:Queue, output_queue:Queue):
