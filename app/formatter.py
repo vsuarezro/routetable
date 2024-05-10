@@ -1,18 +1,26 @@
 import io
 
 
-def output_text(route_result):
+def output_text(route_result, hostname, service, timestamp1, timestamp2):
     stream = io.StringIO()
     if route_result == None:
         stream = io.StringIO("No routes found")
         return stream.getvalue()
     
+    if route_result["added"] == [] or route_result["added"] is None:
+        print(f"No routes added\n",file=stream)
+    
+    if route_result["deleted"] == [] or route_result["deleted"] is None:
+        print(f"No routes deleted\n",file=stream)
+    
+    if route_result["changed"] == [] or route_result["changed"] is None:
+        print(f"No routes changed\n",file=stream)
 
-    hostname = route_result["added"][0]["hostname"]
-    service = route_result["added"][0]["service"]
     print("#"*80, file=stream)
     print(f"HOSTNAME: {hostname}",file=stream)
     print(f"SERVICE: {service}",file=stream)
+    print(f"TIME 1: {timestamp1}",file=stream)
+    print(f"TIME 2: {timestamp2}",file=stream)
     print("Added routes:",file=stream)
     for route in route_result["added"]:
         print(f"+ {route['route']}",file=stream)
@@ -37,14 +45,12 @@ def output_text(route_result):
 
 
 
-def output_csv(route_result):
+def output_csv(route_result, hostname, service, timestamp1, timestamp2):
     stream = io.StringIO()
     if route_result is None:
         stream = io.StringIO("No routes found")
         return stream.getvalue()
     
-    hostname = route_result["added"][0]["hostname"]
-    service = route_result["added"][0]["service"]
     header = "status,hostname,service,route,route_protocol,next_hop,metric"
     print(header,file=stream)
     for route in route_result["added"]:
