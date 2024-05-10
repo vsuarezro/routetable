@@ -4,7 +4,7 @@ import logging
 import os
 import re
 
-import orchestrate
+import app.orchestrator as orchestrator
 import formatter
 
 logging.basicConfig(
@@ -51,7 +51,7 @@ def main():
         logging.basicConfig(level=logging.CRITICAL)
 
     if args.list == 'all':
-        timestamp_list = orchestrate.list_timestamps()
+        timestamp_list = orchestrator.list_timestamps()
         if timestamp_list is None or len(timestamp_list) == 0:
             logging.warning("No timestamps found")
             return
@@ -59,7 +59,7 @@ def main():
             print(timestamp.join(","))
         return
     elif args.list:
-        timestamp_list = orchestrate.list_timestamps(args.list)
+        timestamp_list = orchestrator.list_timestamps(args.list)
         if timestamp_list is None or len(timestamp_list) == 0:
             logging.warning(f"No timestamps found for {args.list}")
             return
@@ -75,9 +75,9 @@ def main():
         except ValueError:
             ip_address = None
         if ip_address:
-            orchestrate.fetch_single_device(args.fetch)
+            orchestrator.fetch_single_device(args.fetch)
         elif os.path.isfile(args.fetch):
-            orchestrate.fetch_devices_from_file(args.fetch)
+            orchestrator.fetch_devices_from_file(args.fetch)
         else:
             logging.error(f"{args.fetch} is not a valid IP address or file")
             return
@@ -89,7 +89,7 @@ def main():
         if not os.path.isfile(filename):
             logging.error(f"{filename} does not exist")
             return
-        orchestrate.load_routes_from_file(filename, timestamp)
+        orchestrator.load_routes_from_file(filename, timestamp)
         logging.info(f"Loaded routes from {filename} at {timestamp}")
         return
     if args.compare:
@@ -107,7 +107,7 @@ def main():
             timestamp1, timestamp2 = timestamp2, timestamp1
             logging.warning(f"Swapped timestamps {timestamp1} and {timestamp2}")
 
-        routes_comparison = orchestrate.compare_routes(hostname, service, timestamp1, timestamp2)
+        routes_comparison = orchestrator.compare_routes(hostname, service, timestamp1, timestamp2)
         if routes_comparison is None:
             logging.error("No routes found")
             return
