@@ -1,14 +1,18 @@
 import logging
+logger = logging.getLogger(__name__)
 
 import storage
+database_url = "routes.sqlite3"
+storage.initialize_database(database_url)
+import netparser
 import file_operations
 
 
 def list_timestamps(hostname: str = None):
     logging.info("list_timestamps")
     if hostname:
-        return storage.get_list_of_timestamps(hostname)
-    return storage.get_list_of_timestamps()
+        return storage.get_list_of_timestamps(hostname, url=database_url)
+    return storage.get_list_of_timestamps(url=database_url)
 
 def fetch_single_device(ip_address: str):
     import network_interface
@@ -18,7 +22,7 @@ def fetch_single_device(ip_address: str):
 def fetch_devices_from_file(filename: str):
     pass
 
-def load_routes_from_file(filename: str, timestamp: str):
+def load_routes_from_file(filename: str, hostname: str, timestamp: str, vendor: str):
     """
     Load routes from a file.
     :param filename: The file to load from.
@@ -27,8 +31,11 @@ def load_routes_from_file(filename: str, timestamp: str):
     """
     logging.debug("load_routes_from_file")
     content = file_operations.load_file(filename)
-    routes = parser(content, timestamp)
-    storage.save_routes(routes)
+    routes = netparser.parse(vendor, content, hostname, timestamp)
+    logger.info(f"Loaded {len(routes)} routes from {filename}")
+    storage.save_routes(timestamp, routes, url=database_url)
+    logger.info(f"Saved {len(routes)} routes to the database")
+
 
 
 def compare_routes(hostname: str, service: str, timestamp1: str, timestamp2: str):
@@ -41,10 +48,5 @@ def compare_routes(hostname: str, service: str, timestamp1: str, timestamp2: str
     :return: A dictionary containing the added, deleted, and changed routes.
     """
     logging.info("compare_routes")
-    return storage.compare_routes(hostname, service, timestamp1, timestamp2)
+    return storage.compare_routes(hostname, service, timestamp1, timestamp2, url=database_url)
 
-
-
-
-def compare_routes(hostname, service, timestamp1, timestamp2):
-    pass
