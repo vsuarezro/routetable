@@ -172,3 +172,27 @@ bgp_grammar = pp.OneOrMore(
         pp.Group(bgp_vpn_ipv4_entry) | 
         pp.Suppress(ignore_line)
     )
+
+
+service_name = pp.Word(pp.alphanums)
+service_name_line = pp.Group(
+        pp.Suppress(pp.Literal("Route Table"))
+        + pp.Suppress(pp.Literal("(")) 
+        + pp.Suppress(pp.Literal("Router:") )
+        + service_name("service_name") 
+        + pp.Suppress(pp.Literal(")"))
+    )
+
+service_grammar = pp.OneOrMore(
+    service_name_line
+    | pp.Suppress(ignore_line)
+)
+
+
+def parse_output(raw_output):
+   results = igp_grammar.parse_string(raw_output)
+   return results
+
+def parse_service(raw_output):
+   results = service_grammar.parse_string(raw_output)
+   return results
