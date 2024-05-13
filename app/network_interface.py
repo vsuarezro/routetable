@@ -203,48 +203,21 @@ def producer_task(devices_queue, output_queue):
             
 
 # producer manager task
-def producer_manager(number_of_threads:int, devices_queue:Queue, output_queue:Queue):
-    logger.debug(f"producer_manager {get_native_id()} started")
-    # create thread pool
-    with ThreadPool(number_of_threads) as pool:
-        # use threads to generate items and put into the queue
-        logger.debug(f"Started pool with {number_of_threads} threads")
-        _ = [pool.apply_async(producer_task, args=(devices_queue,output_queue)) for _ in range(number_of_threads)]
-        # wait for all tasks to complete
-        logger.debug(f"Producer_manager {get_native_id()} waiting for all tasks to complete")
-    # pool.close()
-    pool.join()
-    # put a signal to expect no further tasks results
-    output_queue.put(None)
-    # report a message
-    logger.info('>Producer_manager processed all devices')
-
-
-def execute_devices_commands(devices:list):
-    logger.debug("execute_devices_commands")
-    devices_queue = Queue()
-    for device in devices:
-        devices_queue.put(device)
-    else:
-        devices_queue.put(None)
-    
-    logger.debug(f"devices_queue: {devices_queue}")
-
-    output_queue = Queue()
-    number_of_threads = min(len(devices)+3, os.cpu_count() * 4)
-    logger.debug(f"number_of_threads: {number_of_threads}")
-
-    producer = Thread(target=producer_manager, args=(number_of_threads, devices_queue, output_queue,))
-    logger.debug(f"Starting producer: {producer}")
-    producer.start()
-    logger.debug(f"Waiting for producer: {producer}")
-    producer.join()
-    logger.debug(f"Finished producer: {producer}")
-
-    output_list = []
-    while not output_queue.empty():
-        output_list.append(output_queue.get())
-    return output_list
+# def producer_manager(number_of_threads:int, devices_queue:Queue, output_queue:Queue):
+#     logger.debug(f"producer_manager {get_native_id()} started")
+#     # create thread pool
+#     with ThreadPool(number_of_threads) as pool:
+#         # use threads to generate items and put into the queue
+#         logger.debug(f"Started pool with {number_of_threads} threads")
+#         _ = [pool.apply_async(producer_task, args=(devices_queue,output_queue)) for _ in range(number_of_threads)]
+#         # wait for all tasks to complete
+#         logger.debug(f"Producer_manager {get_native_id()} waiting for all tasks to complete")
+#     # pool.close()
+#     pool.join()
+#     # put a signal to expect no further tasks results
+#     output_queue.put(None)
+#     # report a message
+#     logger.info('>Producer_manager processed all devices')
 
 
 # def execute_devices_commands(devices:list):
@@ -254,20 +227,53 @@ def execute_devices_commands(devices:list):
 #         devices_queue.put(device)
 #     else:
 #         devices_queue.put(None)
-#     output_queue = Queue()
-#     number_of_workers = min(len(devices), os.cpu_count() * 4)
-#     logger.debug(f"number_of_threads: {number_of_workers}")
+    
+#     logger.debug(f"devices_queue: {devices_queue}")
 
-#     output_list = list()
-#     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-#         future_to_devices = {executor.submit(producer_task, devices_queue, output_queue): device for device in devices}
-#         for future in concurrent.futures.as_completed(future_to_devices):
-#             dev = future_to_devices[future]
-#             try:
-#                 data = future.result()
-#             except Exception as exc:
-#                 logger.debug(f"{dev}: Exception generated {exc}")
-#             else:
-#                 logger.debug(f"DATA = {dev}\n{data}")
-#                 output_list.append(data)
+#     output_queue = Queue()
+#     number_of_threads = min(len(devices), os.cpu_count() * 4)
+#     logger.debug(f"number_of_threads: {number_of_threads}")
+
+#     producer = Thread(target=producer_manager, args=(number_of_threads, devices_queue, output_queue,))
+#     logger.debug(f"Starting producer: {producer}")
+#     producer.start()
+#     logger.debug(f"Waiting for producer: {producer}")
+#     producer.join()
+#     logger.debug(f"Finished producer: {producer}")
+
+#     output_list = []
+#     while not output_queue.empty():
+#         output_list.append(output_queue.get())
 #     return output_list
+
+
+def execute_devices_commands(devices:list):
+    logger.debug("execute_devices_commands")
+    devices_queue = Queue()
+    for device in devices:
+        devices_queue.put(device)
+    else:
+        devices_queue.put(None)
+    output_queue = Queue()
+    number_of_workers = min(len(devices), os.cpu_count() * 4)
+    logger.debug(f"number_of_threads: {number_of_workers}")
+
+    output_list = list()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=number_of_workers) as executor:
+        future_to_devices = {executor.submit(producer_task, devices_queue, output_queue): device for device in devices}
+        for future in concurrent.futures.as_completed(future_to_devices):
+            dev = future_to_devices[future]
+            try:
+                data = future.result()
+            except Exception as exc:
+                logger.debug(f"{dev}: Exception generated {exc}")
+            else:
+                logger.debug(f"DATA = {dev}\n{data}")
+                output_list.append(data)
+    while not output_queue.empty():
+        data = output_queue.get()
+        if data is None:
+            _ = output_queue.get()
+            continue
+        output_list.append(output_queue.get())
+    return output_list
