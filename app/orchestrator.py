@@ -19,6 +19,10 @@ def list_timestamps(hostname: str = None):
         return storage.get_list_of_timestamps(hostname, url=database_url)
     return storage.get_list_of_timestamps(url=database_url)
 
+def remove_routes_for_device(hostname: str, timestamp: str):
+    logger.info("remove_route")
+    rows_deleted = storage.remove_routes(hostname, timestamp, url=database_url)
+    return rows_deleted
 
 def fetch_single_device(ip_address: str):
     import network_interface
