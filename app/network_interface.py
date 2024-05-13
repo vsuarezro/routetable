@@ -243,6 +243,10 @@ def producer_task(devices_queue, output_queue):
 
 #     output_list = []
 #     while not output_queue.empty():
+#         data = output_queue.get()
+#         if data is None:
+#             _ = output_queue.get()
+#             continue
 #         output_list.append(output_queue.get())
 #     return output_list
 
@@ -269,11 +273,14 @@ def execute_devices_commands(devices:list):
                 logger.debug(f"{dev}: Exception generated {exc}")
             else:
                 logger.debug(f"DATA = {dev}\n{data}")
-                output_list.append(data)
+                # output_list.append(data)
+    
+    counter = 0
     while not output_queue.empty():
+        logger.debug(f"Getting data from output_queue {counter}")
+        counter += 1
         data = output_queue.get()
         if data is None:
-            _ = output_queue.get()
             continue
-        output_list.append(output_queue.get())
+        output_list.append(data)
     return output_list
