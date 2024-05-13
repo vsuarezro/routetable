@@ -107,10 +107,28 @@ def test_route_dict_output():
 
     }
 
+@pytest.fixture(scope="module") 
+def test_hostname():
+    return "HOSTNAME1"
 
-def test_output_text(test_route_dict_output):
-    print(formatter.output_text(test_route_dict_output))
-    output = formatter.output_text(test_route_dict_output)
+@pytest.fixture(scope="module") 
+def test_service():
+    return "SERVICE1"
+
+@pytest.fixture(scope="module") 
+def test_timestamp1():
+    return "2023-04-03_13:00"
+
+
+@pytest.fixture(scope="module") 
+def test_timestamp2():
+    return "2023-04-05_23:00"
+
+
+
+def test_output_text(test_route_dict_output, test_hostname, test_service, test_timestamp1, test_timestamp2):
+    print(formatter.output_text(test_route_dict_output,test_hostname, test_service, test_timestamp1, test_timestamp2))
+    output = formatter.output_text(test_route_dict_output,test_hostname, test_service, test_timestamp1, test_timestamp2)
     assert output is not None
     assert "Added" in output
     assert "Deleted" in output
@@ -118,8 +136,8 @@ def test_output_text(test_route_dict_output):
 
 
 def test_output_csv(test_route_dict_output):
-    print(formatter.output_csv(test_route_dict_output))
-    output = formatter.output_csv(test_route_dict_output)
+    print(formatter.output_csv(test_route_dict_output,test_hostname, test_service, test_timestamp1, test_timestamp2))
+    output = formatter.output_csv(test_route_dict_output,test_hostname, test_service, test_timestamp1, test_timestamp2)
     assert output is not None
     assert "status,hostname,service,route,route_protocol,next_hop,metric" in output
     assert "+added" in output
@@ -132,17 +150,24 @@ def test_output_table(test_route_dict_output):
     print(formatter.output_table(test_route_dict_output))
     assert formatter.output_table(test_route_dict_output)
 
-@pytest.mark.skip(reason="not yet implemented")
 def test_output_json(test_route_dict_output):
-    print(formatter.output_json(test_route_dict_output))
-    assert formatter.output_json(test_route_dict_output)
+    print(formatter.output_json(test_route_dict_output,test_hostname, test_service, test_timestamp1, test_timestamp2))
+    output = formatter.output_json(test_route_dict_output,test_hostname, test_service, test_timestamp1, test_timestamp2)
+    assert output is not None
+    assert "added" in output
+    assert "deleted" in output
+    assert "changed" in output
 
-@pytest.mark.skip(reason="not yet implemented")
+
 def test_output_xml(test_route_dict_output):
-    print(formatter.output_xml(test_route_dict_output))
-    assert formatter.output_xml(test_route_dict_output)    
+    print(formatter.output_xml(test_route_dict_output,test_hostname, test_service, test_timestamp1, test_timestamp2), )
+    output = formatter.output_xml(test_route_dict_output,test_hostname, test_service, test_timestamp1, test_timestamp2)
+    assert output is not None   
 
-@pytest.mark.skip(reason="not yet implemented")
 def test_output_yaml(test_route_dict_output):
-    print(formatter.output_yaml(test_route_dict_output))
-    assert formatter.output_yaml(test_route_dict_output)
+    print(formatter.output_yaml(test_route_dict_output,test_hostname, test_service, test_timestamp1, test_timestamp2))
+    output = formatter.output_yaml(test_route_dict_output,test_hostname, test_service, test_timestamp1, test_timestamp2)
+    assert output is not None
+    assert "added" in output
+    assert "deleted" in output
+    assert "changed" in output
