@@ -139,6 +139,23 @@ def get_routes(hostname:str, service:str, timestamp: str, url: str = default_dat
 
     return routes
 
+def remove_routes(
+    hostname: str,
+    timestamp: str,
+    url: str = default_database_url,
+) -> None:
+    """
+    Remove routes from the database quering hostname and timestamp
+    """
+    with get_connection(url) as database_connection:
+        cursor = database_connection.cursor()
+        rows_deleted = cursor.execute("DELETE FROM igp_routes WHERE hostname=? AND timestamp=?", (hostname, timestamp,)).rowcount
+        database_connection.commit()
+    return rows_deleted
+
+
+
+
 
 def compare_routes(
     hostname: str,
@@ -152,12 +169,12 @@ def compare_routes(
     added_deleted_routes_dict = get_added_deleted_routes(hostname, service, timestamp1, timestamp2, url=url)
     changed_routes_dict = changed_routes(hostname, service, timestamp1, timestamp2, url)
     if added_deleted_routes_dict is not None:
-        logger.debug(f"Added and deleted routes: {added_deleted_routes_dict['added'][0]}")
+        logger.debug(f"Added and deleted routes: {added_deleted_routes_dict}")
     else:
         logger.debug(f"No added and deleted routes found")
     
     if changed_routes_dict is not None: 
-        logger.debug(f"Changed routes: {changed_routes_dict['changed'][0]}")
+        logger.debug(f"Changed routes: {changed_routes_dict}")
     else:
         logger.debug(f"No changed routes found")
     compared_routes = dict()
@@ -185,9 +202,14 @@ def get_added_deleted_routes(
         logger.debug(f"Got routes for {hostname} {service} {timestamp1} first route: {routes2[0]}")
 
     if routes1 is None or routes2 is None:
-        return None  # Or raise an exception if timestamps are invalid
+        logger.debug(f"No routes found for {hostname} {service} {timestamp1} {timestamp2}")
+        NO_ROUTES = {
+        "added": [],
+        "deleted": [],
+        }
+        return NO_ROUTES  # Or raise an exception if timestamps are invalid
+
     # Create a dictionary of unique identifiers for routes in timestamp1
-    
     unique_identifiers1 = {
         get_unique_identifier(route, fields): route for route in routes1
     }
