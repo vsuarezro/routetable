@@ -97,7 +97,7 @@ def producer_task(devices_queue, output_queue):
         # PROXY
         # For device_dict to use a proxy, it must contain a "proxy" keyword
         # The value of the "proxy" keyword must contain a dictionary with all arguments to set a socks object
-        NO_RESPONSE_DICT = {"output": None}
+        NO_RESPONSE_DICT = {"output": {}}
         if device_dict.get("proxy"):
             logger.info(f">Producer {get_native_id()}. Device:{hostname} IP:{device_dict.get('ip')} has a proxy: {proxy_info}")
             sock = socks.socksocket()
@@ -173,7 +173,7 @@ def producer_task(devices_queue, output_queue):
             logger.error(f"hostname: {hostname}, ip: {device_dict.get('ip')}, Maximum number of retries reached")
             NO_RESPONSE_DICT["hostname"] = hostname
             NO_RESPONSE_DICT["ip"] = device_dict.get('ip')
-            NO_RESPONSE_DICT["output"] = None
+            NO_RESPONSE_DICT["output"] = {}
             NO_RESPONSE_DICT["error"] += "MaximumNumberRetriesReached"
             output_queue.put(NO_RESPONSE_DICT)
             continue
@@ -182,7 +182,7 @@ def producer_task(devices_queue, output_queue):
             # Device connection is not alive, put the error in the output_queue and continue witht he next device in the device_queue
             NO_RESPONSE_DICT["hostname"] = hostname
             NO_RESPONSE_DICT["ip"] = device_dict.get('ip')
-            NO_RESPONSE_DICT["output"] = None
+            NO_RESPONSE_DICT["output"] = {}
             NO_RESPONSE_DICT["error"] = "ConnectionNotAlive"
             output_queue.put(NO_RESPONSE_DICT)
             continue
@@ -195,6 +195,7 @@ def producer_task(devices_queue, output_queue):
 
         for command in commands:
             logger.debug(f">Producer {get_native_id()} hostname: {hostname}, ip: {device_dict.get('ip')}, command: {command}")
+            logger.info(f"Executing {command} on hostname: {hostname}")
             RESPONSE_DICT["output"][command] = get_output(net_connect_generic_pe, command)
         else:
             logger.debug(f">Producer {get_native_id()} processed commands for hostname: {hostname}, ip: {device_dict.get('ip')}")
