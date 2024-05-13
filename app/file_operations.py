@@ -11,7 +11,7 @@ def load_file_content(filename: str):
 
     if not os.path.exists(filename):
         logger.error(f"File {filename} does not exist")
-        raise FileNotFoundError("File {filename} does not exist")
+        raise FileNotFoundError(f"File {filename} does not exist")
 
     if os.path.getsize(filename) > MAX_FILE_SIZE:
         logger.error(f"File {filename} exceeds maximum size")
