@@ -177,7 +177,7 @@ def main():
         for filename, output in tuples_list:
             with open(filename, "w") as f:
                 f.write(output)
-                print(f"File {filename}\nOUTPUT: {output}")
+                logger.info(f"printing to {filename}")
 
     if args.command == "compare":
         logger.info("Starting compare command")
