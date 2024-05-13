@@ -62,13 +62,19 @@ def compare_routes(hostname: str, service: str, timestamp1: str, timestamp2: str
     )
 
 
-def remote_command_execution(inventory_filename: str, command_filename: str, dry_run_flag: bool = False,):
+def remote_command_execution(inventory_filename: str, command_filename: str, device_filter: str="all", dry_run_flag: bool = False,):
     """
     Gather inventory of devices from a file.
     :param filename: The file to load from.
+    :param device_filter: from the inventory file only run it on filtered devices.
+    :param dry_run_flag: A flag to enable dry run mode.
     :return: None
     """
     logger.debug("remote_command_execution")
+    if device_filter == "all":
+        logger.warning("Device filter not yet implemented")
+        logger.info("Running on all devices")
+        device_filter = None
     inventory = yaml_operations.load_inventory(inventory_filename)
     if not inventory:
         logger.error("No inventory found")
@@ -94,7 +100,5 @@ def remote_command_execution(inventory_filename: str, command_filename: str, dry
         return
 
     output_list = network_interface.execute_devices_commands(device_list)
-    logger.info(f"Commands output generated on {len(device_list)} devices")
-    logger.info(f"Ouput generated: {output_list}")
 
     return output_list
