@@ -175,10 +175,11 @@ bgp_grammar = pp.OneOrMore(
 
 
 service_name = pp.Word(pp.alphanums)
+router_or_service = pp.Literal("Router:") | pp.Literal("Service:")
 service_name_line = pp.Group(
         pp.Suppress(pp.Literal("Route Table"))
         + pp.Suppress(pp.Literal("(")) 
-        + pp.Suppress(pp.Literal("Router:") )
+        + pp.Suppress(router_or_service)
         + service_name("service_name") 
         + pp.Suppress(pp.Literal(")"))
     )
