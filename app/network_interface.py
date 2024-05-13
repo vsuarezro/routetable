@@ -1,7 +1,29 @@
 """
+network_interface.py is an interface to send commands to multiple devices using threads and netmiko.
+the script receives a list of devices with the following format:
+{
+    "device_type": vendor or type of device, (options include cisco_xe, cisco_xr, nokia, etc)
+    "ip": ip address of the device, 
+    "hostname": hostname, 
+    "username": username, 
+    "password": password, 
+    "proxy: : (optional) proxy to use, 
+    "commands": [ list of commands to send to the device in order of execution ], 
+    other arguments for netmiko : value,
+}
 
 
+the script will generate a thread and on each thread will try to connect to the device and send the commands.
+the result of each thread is put into another queue and the format of the response dictionary is as follows:
+{
+    "hostname" : hostname of the device,
+    "ip" : ip address of the device,
+    "output" : { comand1: output of command1, command2: output of command2, ... }
+    "error" : error message if there was an error, if not then an empty string "",
+}
 
+The idea of the script is to be callable from another module. 
+This script tries not to process the output in any way.
 """
 
 
@@ -24,8 +46,6 @@ from netmiko import ConnectHandler
 
 # producer task
 def producer_task(devices_queue, output_queue):
-    hostname_re = re.compile("hostname ([\w\-]+)", re.M)
-   
     def get_output(connection_handler, command):
         timeout = 360
         output = connection_handler.send_command_timing(command, read_timeout=timeout)
@@ -45,22 +65,24 @@ def producer_task(devices_queue, output_queue):
             print(">Producer: is {} alive -> {}".format(ip, False ))
             return False
     
+    logger.debug(f"producer_task {get_native_id()} started")    
     while True:
         # Get the dict of the next device to process
         device_dict = devices_queue.get()
         # Set the basic responde if there is an error in the processing of this device
-        NO_RESPONSE_DICT = {"output": None}
-        # Save some values from the device_dict that later will be removed to acommodate the dictionary for 'ConnectHandler'
-        hostname = device_dict.get("hostname")
-        proxy_info = device_dict.get("proxy") if device_dict.get("proxy") else None
-        commands = device_dict.get("commands")
-        del device_dict["commands"]
+        logger.debug(f">Producer {get_native_id()} found device: {device_dict}")
 
         if device_dict is None:
             devices_queue.put(None)
             logger.debug(f">Producer {get_native_id()} found no more devices. Shutting down")
             return
         logger.debug(f">Entering Producer {get_native_id()}, device:{hostname} ip: {device_dict.get('ip')}")
+
+        # Save some values from the device_dict that later will be removed to acommodate the dictionary for 'ConnectHandler'
+        hostname = device_dict.get("hostname")
+        proxy_info = device_dict.get("proxy")
+        commands = device_dict.get("commands")
+        del device_dict["commands"]
 
         if device_dict.get("hostname"):
             # Remove hostname key from dictionary because 'ConnectHandler' doesn't use it
@@ -73,6 +95,7 @@ def producer_task(devices_queue, output_queue):
         # PROXY
         # For device_dict to use a proxy, it must contain a "proxy" keyword
         # The value of the "proxy" keyword must contain a dictionary with all arguments to set a socks object
+        NO_RESPONSE_DICT = {"output": None}
         if device_dict.get("proxy"):
             logger.info(f">Producer {get_native_id()}. Device:{hostname} IP:{device_dict.get('ip')} has a proxy: {proxy_info}")
             sock = socks.socksocket()
@@ -178,14 +201,47 @@ def producer_task(devices_queue, output_queue):
 
 # producer manager task
 def producer_manager(number_of_threads:int, devices_queue:Queue, output_queue:Queue):
+    logger.debug(f"producer_manager {get_native_id()} started")
     # create thread pool
     with ThreadPool(number_of_threads) as pool:
         # use threads to generate items and put into the queue
+        logger.debug(f"Started pool with {number_of_threads} threads")
         _ = [pool.apply_async(producer_task, args=(devices_queue,output_queue)) for _ in range(number_of_threads)]
         # wait for all tasks to complete
-        pool.close()
-        pool.join()
-    # put a signal to expect no further tasks
-    devices_queue.put(None)
+        logger.debug(f"Producer_manager {get_native_id()} waiting for all tasks to complete")
+    # pool.close()
+    pool.join()
+    # put a signal to expect no further tasks results
+    output_queue.put(None)
     # report a message
     logger.info('>Producer_manager processed all devices')
+
+
+def execute_devices_commands(devices:list):
+    logger.debug("execute_devices_commands")
+    devices_queue = Queue()
+    for device in devices:
+        devices_queue.put(device)
+    else:
+        devices_queue.put(None)
+    
+    logger.debug(f"devices_queue: {devices_queue}")
+
+    output_queue = Queue()
+    if len(devices) <= os.cpu_count() * 4:
+        number_of_threads = len(devices) 
+    else:
+        number_of_threads = os.cpu_count() * 4
+    logger.debug(f"number_of_threads: {number_of_threads}")
+
+    producer = Thread(target=producer_manager, args=(number_of_threads, devices_queue, output_queue,))
+    logger.debug(f"Starting producer: {producer}")
+    producer.start()
+    logger.debug(f"Waiting for producer: {producer}")
+    producer.join()
+    logger.debug(f"Finished producer: {producer}")
+
+    output_list = []
+    while not output_queue.empty():
+        output_list.append(output_queue.get())
+    return output_list
