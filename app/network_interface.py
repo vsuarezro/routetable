@@ -30,6 +30,7 @@ This script tries not to process the output in any way.
 from threading import Thread, get_native_id
 from multiprocessing.pool import ThreadPool
 from queue import Queue
+import concurrent.futures
 
 import os
 import logging
@@ -43,6 +44,7 @@ import re
 import socks 
 from netmiko.exceptions import NetMikoAuthenticationException, NetMikoTimeoutException
 from netmiko import ConnectHandler
+
 
 # producer task
 def producer_task(devices_queue, output_queue):
@@ -76,7 +78,7 @@ def producer_task(devices_queue, output_queue):
             devices_queue.put(None)
             logger.debug(f">Producer {get_native_id()} found no more devices. Shutting down")
             return
-        logger.debug(f">Entering Producer {get_native_id()}, device:{hostname} ip: {device_dict.get('ip')}")
+        logger.debug(f">Entering Producer {get_native_id()}, device:{device_dict.get('hostname')} ip: {device_dict.get('ip')}")
 
         # Save some values from the device_dict that later will be removed to acommodate the dictionary for 'ConnectHandler'
         hostname = device_dict.get("hostname")
@@ -195,7 +197,8 @@ def producer_task(devices_queue, output_queue):
             logger.debug(f">Producer {get_native_id()} hostname: {hostname}, ip: {device_dict.get('ip')}, command: {command}")
             RESPONSE_DICT["output"][command] = get_output(net_connect_generic_pe, command)
         else:
-            logger.info(f">Producer {get_native_id()} processed commands for hostname: {hostname}, ip: {device_dict.get('ip')}")
+            logger.debug(f">Producer {get_native_id()} processed commands for hostname: {hostname}, ip: {device_dict.get('ip')}")
+            # logger.debug(f">Producer {get_native_id()} result for hostname: {hostname}, output: {RESPONSE_DICT}")
             output_queue.put(RESPONSE_DICT)
             
 
@@ -228,10 +231,7 @@ def execute_devices_commands(devices:list):
     logger.debug(f"devices_queue: {devices_queue}")
 
     output_queue = Queue()
-    if len(devices) <= os.cpu_count() * 4:
-        number_of_threads = len(devices) 
-    else:
-        number_of_threads = os.cpu_count() * 4
+    number_of_threads = min(len(devices)+3, os.cpu_count() * 4)
     logger.debug(f"number_of_threads: {number_of_threads}")
 
     producer = Thread(target=producer_manager, args=(number_of_threads, devices_queue, output_queue,))
@@ -245,3 +245,29 @@ def execute_devices_commands(devices:list):
     while not output_queue.empty():
         output_list.append(output_queue.get())
     return output_list
+
+
+# def execute_devices_commands(devices:list):
+#     logger.debug("execute_devices_commands")
+#     devices_queue = Queue()
+#     for device in devices:
+#         devices_queue.put(device)
+#     else:
+#         devices_queue.put(None)
+#     output_queue = Queue()
+#     number_of_workers = min(len(devices), os.cpu_count() * 4)
+#     logger.debug(f"number_of_threads: {number_of_workers}")
+
+#     output_list = list()
+#     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+#         future_to_devices = {executor.submit(producer_task, devices_queue, output_queue): device for device in devices}
+#         for future in concurrent.futures.as_completed(future_to_devices):
+#             dev = future_to_devices[future]
+#             try:
+#                 data = future.result()
+#             except Exception as exc:
+#                 logger.debug(f"{dev}: Exception generated {exc}")
+#             else:
+#                 logger.debug(f"DATA = {dev}\n{data}")
+#                 output_list.append(data)
+#     return output_list
