@@ -49,6 +49,7 @@ show router [router_id] route-table
 
 interface_name = pp.Regex(r"[\w\d\-\/ ]{1,60}")
 tunneled_bgp = pp.Literal("tunneled:BGP")
+tunneled_ldc = pp.Literal("tunneled")
 tunneled_isis_sr = pp.Combine(pp.Literal("tunneled:SR-ISIS:") + digits)
 tunneled_isis_sr_te = pp.Combine(pp.Literal("tunneled:SR-TE:") + digits)
 tunneled_rsvp = pp.Combine(pp.Literal("tunneled:RSVP:") + digits)
@@ -62,7 +63,7 @@ route_type = pp.Literal("Remote") | pp.Literal("Local") | pp.Literal("Blackh*")
 route_protocol = pp.Literal("BGP_LABEL") | pp.Literal("ISIS") | pp.Literal("Static") | pp.Literal("BGP VPN") | pp.Literal("BGP") | pp.Literal("Aggr") | pp.Literal("Local")
 age = age_hms | age_dhm | age_dh
 preference = digits
-interface_next_hop = tunneled_bgp | tunneled_isis_sr | tunneled_rsvp | tunneled_isis_sr_te
+interface_next_hop = tunneled_bgp |  tunneled_isis_sr | tunneled_rsvp | tunneled_isis_sr_te | tunneled_ldc
 next_hop = ipv4_address | interface_name
 metric = digits
 
