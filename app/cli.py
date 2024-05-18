@@ -48,8 +48,17 @@ def main():
         default="all",
         help="Filter devices (hostname or role)",
     )
+    parser.add_argument(
+        "--table",
+        choices=[
+            "route",
+            "bgp",
+        ],
+        default="route",
+        help="Select route-table or bgp-table to compare. Defaults to route",
+    )
 
-    # Main commands: compare and scrape
+    # Main commands: compare, scrape, checkpoint
     subparsers = parser.add_subparsers(title="Commands", dest="command")
 
     # Scrape command
@@ -73,16 +82,7 @@ def main():
     )
 
     # Compare Command
-    parser_compare = subparsers.add_parser("compare", help="Compare configurations")
-    parser_compare.add_argument(
-        "--table",
-        choices=[
-            "route",
-            "bgp",
-        ],
-        default="route",
-        help="Select route-table or bgp-table to compare. Defaults to route",
-    )
+    parser_compare = subparsers.add_parser("compare", help="Compare outputs")
     parser_compare.add_argument(
         "--compare-output",
         choices=["text", "csv", "yaml", "json", "xml", "table"],
@@ -98,17 +98,17 @@ def main():
         metavar=("HOSTNAME", "SERVICE", "TIMESTAMP1", "TIMESTAMP2"),
         help="Compare routes between two timestamps",
     )
-    compare_group.add_argument(
-        "--load-file",
-        nargs=4,
-        metavar=("FILENAME", "HOSTNAME", "TIMESTAMP", "VENDOR"),
-        help="Load routes from a file with a timestamp",
-    )
-    compare_group.add_argument(
-        "--fetch",
-        action="store_true",
-        help="Fetch routes from a device (IP address) or a file of devices",
-    )
+    # compare_group.add_argument(
+    #     "--load-file",
+    #     nargs=4,
+    #     metavar=("FILENAME", "HOSTNAME", "TIMESTAMP", "VENDOR"),
+    #     help="Load routes from a file with a timestamp",
+    # )
+    # compare_group.add_argument(
+    #     "--fetch",
+    #     action="store_true",
+    #     help="Fetch routes from a device (IP address) or a file of devices",
+    # )
     compare_group.add_argument(
         "--list",
         nargs="?",
@@ -117,18 +117,37 @@ def main():
         help="List available timestamps (optionally filter by hostname)",
         type=str,
     )
-    compare_group.add_argument(
+
+    parser_checkpoint = subparsers.add_parser("checkpoint", help="Save a route table from device or file")
+
+    checkpoint_group = (
+        parser_checkpoint.add_mutually_exclusive_group(required=True)
+    )  # Mutually exclusive group within 'checkpoint'
+
+    checkpoint_group.add_argument(
+        "--load-file",
+        nargs=4,
+        metavar=("FILENAME", "HOSTNAME", "TIMESTAMP", "VENDOR"),
+        help="Load routes from a file with a timestamp",
+    )
+    checkpoint_group.add_argument(
+        "--fetch",
+        action="store_true",
+        help="Fetch routes from a device (IP address) or a file of devices",
+    )
+    checkpoint_group.add_argument(
         "--remove",
         nargs=2,
         metavar=("HOSTNAME", "TIMESTAMP"),
         help="Remove specific compare checkpoints from the database",
     )
-
     # Logging options
     logging_group = parser.add_mutually_exclusive_group()
     logging_group.add_argument(
         "-d", "--debug", action="store_true", help="Enable debug logging"
     )
+
+
     logging_group.add_argument(
         "-q",
         "--quiet",
@@ -185,9 +204,6 @@ def main():
         if (
             not args.list
             and not args.query
-            and not args.load_file
-            and not args.fetch
-            and not args.remove
         ):
             args.list = "all"
 
@@ -201,19 +217,6 @@ def main():
                 return
             for timestamp in timestamp_list:
                 print(" ".join([str(x) for x in timestamp]))
-            exit()
-
-        if args.load_file:
-            logger.info("Loading routes from file")
-
-            filename, hostname, timestamp, vendor = args.load_file
-            if not validate_timestamp(timestamp):
-                logger.error(
-                    f"{timestamp} is not a valid timestamp. format is YYYY-MM-DD_HH:MM"
-                )
-                return
-            orchestrator.load_routes_from_file(filename, hostname, timestamp, vendor)
-            logger.info(f"Loaded routes from {filename} at {timestamp}")
             exit()
 
         if args.query:
@@ -261,6 +264,24 @@ def main():
             entries_deleted = orchestrator.remove_routes_for_device(hostname, timestamp)
             logger.info(f"Entries deleted: {entries_deleted}")
             exit()
+
+    if args.command == "checkpoint":
+        logger.info("Starting compare command")
+        logger.info(f"Reference table:{args.table}")
+
+        if args.load_file:
+            logger.info("Loading routes from file")
+
+            filename, hostname, timestamp, vendor = args.load_file
+            if not validate_timestamp(timestamp):
+                logger.error(
+                    f"{timestamp} is not a valid timestamp. format is YYYY-MM-DD_HH:MM"
+                )
+                return
+            orchestrator.load_routes_from_file(filename, hostname, timestamp, vendor)
+            logger.info(f"Loaded routes from {filename} at {timestamp}")
+            exit()
+
 
     exit()
 
