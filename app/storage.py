@@ -42,6 +42,36 @@ logger = logging.getLogger(__name__)  # Get a logger for the 'storage' module
 
 default_database_url = "routes.sqlite3"
 
+class DatabaseConnection:
+    __instance = None  
+
+    def __init__(self, url):
+        if DatabaseConnection.__instance is not None:
+            raise Exception("This class is a singleton! Use the get_instance() method.")
+        else:
+            DatabaseConnection.__instance = self
+            self._conn = sqlite3.connect(url)
+
+    @staticmethod
+    def get_instance():
+        """ Static access method. """
+        if DatabaseConnection.__instance is None:
+            DatabaseConnection(default_database_url)
+        return DatabaseConnection.__instance
+
+    def get_connection(self):
+        """ Returns a connection to the database """
+        return self._conn
+
+    # New methods for testing
+    @staticmethod
+    def set_database_url_for_testing(url):
+        global default_database_url
+        default_database_url = url
+
+    @staticmethod
+    def reset_instance():
+        DatabaseConnection.__instance = None
 
 def get_connection(db_url: str = default_database_url):
     """Returns a connection to the database"""
@@ -129,9 +159,12 @@ def get_routes(hostname:str, service:str, timestamp: str, url: str = default_dat
     """Retrieves routes for a hostname at a specific timestamp from the SQLite database"""
     with get_connection(url) as database_connection:
         cursor = database_connection.cursor()
-
-        cursor.execute("SELECT * FROM igp_routes WHERE hostname=? AND service=? AND timestamp=?", (hostname, service, timestamp,))
-        results = cursor.fetchall()
+        try:
+            cursor.execute("SELECT * FROM igp_routes WHERE hostname=? AND service=? AND timestamp=?", (hostname, service, timestamp,))
+            results = cursor.fetchall()
+        except sqlite3.Error as e:
+            logger.error(f"Error getting changed routes: {e}")
+            raise 
 
     routes = [
         dict(zip([column[0] for column in cursor.description], row)) for row in results
@@ -253,33 +286,38 @@ def changed_routes(
         return None  # Or raise an exception if timestamps are invalid
     with get_connection(url) as database_connection:
         cursor = database_connection.cursor()
-        cursor.execute(
-            """
-            SELECT 
-                r1.route, 
-                r1.next_hop AS next_hop_before, r2.next_hop AS next_hop_after,
-                r1.metric AS metric_before, r2.metric AS metric_after,
-                r1.route_protocol AS route_protocol_before, r2.route_protocol AS route_protocol_after
-            FROM 
-                igp_routes r1
-            INNER JOIN 
-                igp_routes r2 
-            ON 
-                r1.route = r2.route 
-            WHERE 
-                r1.hostname = ? AND r1.service = ? AND r1.timestamp = ? AND 
-                r2.hostname = ? AND r2.service = ? AND r2.timestamp = ? AND 
-                (r1.next_hop != r2.next_hop OR 
-                r1.metric != r2.metric OR 
-                r1.route_protocol != r2.route_protocol)
-        """,
-            (hostname, service, timestamp1, hostname, service, timestamp2),
-        )
+        try:
+            cursor.execute(
+                """
+                SELECT 
+                    r1.route, 
+                    r1.next_hop AS next_hop_before, r2.next_hop AS next_hop_after,
+                    r1.metric AS metric_before, r2.metric AS metric_after,
+                    r1.route_protocol AS route_protocol_before, r2.route_protocol AS route_protocol_after
+                FROM 
+                    igp_routes r1
+                INNER JOIN 
+                    igp_routes r2 
+                ON 
+                    r1.route = r2.route 
+                WHERE 
+                    r1.hostname = ? AND r1.service = ? AND r1.timestamp = ? AND 
+                    r2.hostname = ? AND r2.service = ? AND r2.timestamp = ? AND 
+                    (r1.next_hop != r2.next_hop OR 
+                    r1.metric != r2.metric OR 
+                    r1.route_protocol != r2.route_protocol)
+            """,
+                (hostname, service, timestamp1, hostname, service, timestamp2),
+            )
+            changed_routes = [
+                dict(zip([column[0] for column in cursor.description], row))
+                for row in cursor.fetchall()
+            ]
 
-        changed_routes = [
-            dict(zip([column[0] for column in cursor.description], row))
-            for row in cursor.fetchall()
-        ]
+        except Exception as e:
+            logger.error(f"Error getting changed routes: {e}")
+            raise
+
 
     return {"changed": changed_routes}
 
