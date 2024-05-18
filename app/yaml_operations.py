@@ -125,6 +125,9 @@ def generate_device_list(inventory: dict, commands: dict) -> list:
                 translated_device_dict["commands"].extend(commands.get(role,[]))
         else:
             translated_device_dict["commands"].extend(commands.get(device,[]))
+        
+        # remove duplicated entries on the commands, each command is to be executed only one and
+        # the first time it appears on the list of commands
         translated_device_dict["commands"] = list(dict.fromkeys(translated_device_dict["commands"]))
 
         logger.debug(f"Device {device} was translated as {translated_device_dict}")
