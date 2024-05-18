@@ -123,6 +123,7 @@ def output_xml(route_result, hostname, service, timestamp1, timestamp2):
     return stream.getvalue()
     
 def scrape_output_per_device(output_list):
+    logger.debug("scrape_output_per_device")
     output_tuples = list()
     for device in output_list:
         filename = device.get("hostname", "") + ".txt"
@@ -133,16 +134,20 @@ def scrape_output_per_device(output_list):
     return output_tuples
 
 def scrape_output_per_command(output_list):
+    logger.debug("scrape_output_per_command")
     output_tuples = list()
     for device in output_list:
         file_command_output = ""
         for command_name, command_output in device.get("output", {}).items():
             filename = device.get("hostname", "") + "-" + "_".join(command_name.split()) + ".txt"
+            filename = filename.replace(":","-")
             file_command_output = "COMMAND:" + command_name +"\n" + command_output +"\n"
             output_tuples.append((filename,file_command_output))
     return output_tuples
 
 def scrape_output_single_file(output_list):
+    logger.debug("scrape_output_single_file")
+    logger.warning("***CAUTION*** If lots of outputs are generated, this single-file log can become very large")
     pass
 
 
