@@ -6,14 +6,15 @@ import copy
 import pytest
 import app.storage as storage
 
-@pytest.fixture(scope="module")  # Create database once per test module
+@pytest.fixture(scope="function")  # Create database once per test module
 def test_db():
-    url = ":memory:"  # In-memory database
-    conn = storage._initialize_database(url)  # Initialize the database
-    yield conn
-    storage._destroy_database(conn)  # Destroy the database after the test
+    storage.DatabaseConnection.set_database_url(":memory:")  # Use in-memory DB for tests
+    storage.initialize_database()
+    yield
+    storage.DatabaseConnection.destroy_database()  
+    # storage.DatabaseConnection.reset_instance()  # Clean up and reset the connection
 
-def test_save_routes(test_db: sqlite3.Connection):
+def test_save_routes(test_db):
     timestamp = '2024-05-08_16:21'
     routes = [
         {
@@ -46,14 +47,15 @@ def test_save_routes(test_db: sqlite3.Connection):
     hostname = "HOSTNAME1"
     service = "SERVICE1"
     # Save the routes
-    storage.save_routes(timestamp, routes, test_db)
+    storage.save_routes(timestamp, routes,)
 
     # Assertion: Check if the routes were saved correctly
-    cursor = test_db.cursor()
-    count = cursor.execute("SELECT COUNT(*) FROM igp_routes WHERE hostname=? AND service=? AND timestamp=?", (hostname, service, timestamp,)).fetchone()[0]
+    routes_from_db = storage.get_routes(hostname, service, timestamp)
+    count = len(routes_from_db)
+    # count = cursor.execute("SELECT COUNT(*) FROM igp_routes WHERE hostname=? AND service=? AND timestamp=?", (hostname, service, timestamp,)).fetchone()[0]
     assert count == len(routes)
 
-def test_save_and_get_routes(test_db: sqlite3.Connection):
+def test_save_and_get_routes(test_db):
     timestamp = "2024-05-06_10:31"
     hostname = "HOSTNAME1"
     service = "SERVICE1"
@@ -87,10 +89,10 @@ def test_save_and_get_routes(test_db: sqlite3.Connection):
     ]
 
     # Save the routes
-    storage.save_routes(timestamp, routes, database_connection =test_db)
+    storage.save_routes(timestamp, routes,)
 
     # Retrieve a specific route (e.g., the first one)
-    retrieved_route = storage.get_routes(hostname, service, timestamp, database_connection=test_db)[0]  
+    retrieved_route = storage.get_routes(hostname, service, timestamp,)[0]  
 
     # Assertion: Compare relevant fields
     assert retrieved_route['hostname'] == routes[0]['hostname']
@@ -118,7 +120,7 @@ def test_get_unique_identifier():
     assert unique_identifier == "100-10.20.30.40-1.1.1.1/32-BGP_LABEL"
 
 @pytest.mark.parametrize(
-    "route_data, modified_route_data, expected_key_change, key_before, key_after",
+    "route_data, modified_route_data, expected_key_change, key_before, key_after,",
     [
         # Test case 1: next_hop change 
         (
@@ -136,7 +138,7 @@ def test_get_unique_identifier():
             }, 
             "next_hop",
             "next_hop_before",
-            "next_hop_after"
+            "next_hop_after",
         ),  
         # Test case 2: metric change
         (
@@ -154,7 +156,7 @@ def test_get_unique_identifier():
             }, 
             "metric",
             "metric_before",
-            "metric_after"
+            "metric_after",
         ),
         # Test case 3: protocol change
         (
@@ -171,28 +173,24 @@ def test_get_unique_identifier():
              "interface_next_hop": None, "metric": "100", "preference": "170"
             }, 
             "route_protocol",
-
             "route_protocol_before",
-            "route_protocol_after"
+            "route_protocol_after",
         ),
         # Add more test cases for different change types ... 
     ]
 )
-def test_route_change_detection(route_data, modified_route_data, expected_key_change, key_before, key_after):
+def test_route_change_detection(route_data, modified_route_data, expected_key_change, key_before, key_after,test_db):
     timestamp1 = '2024-05-08_16:20'
     timestamp2 = '2024-05-08_16:35'  # Later timestamp
     hostname = "HOSTNAME1"
     service = "SERVICE1"
 
-    # Initialize the database connection
-    database_connection = storage._initialize_database(":memory:")
-
     # Save the routes for both timestamps (initially the same)
-    storage.save_routes(timestamp1, [route_data], database_connection=database_connection) 
-    storage.save_routes(timestamp2, [modified_route_data], database_connection=database_connection) 
+    storage.save_routes(timestamp1, [route_data],) 
+    storage.save_routes(timestamp2, [modified_route_data],) 
 
     # Perform comparison
-    comparison_result = storage.changed_routes(hostname, service, timestamp1, timestamp2, database_connection=database_connection)
+    comparison_result = storage.changed_routes(hostname, service, timestamp1, timestamp2,)
     
     # Validate the expected field is present
     assert expected_key_change in route_data
@@ -203,11 +201,9 @@ def test_route_change_detection(route_data, modified_route_data, expected_key_ch
     assert changed_route['route'] == route_data['route']
     assert changed_route[key_after] == modified_route_data[expected_key_change]
     assert changed_route[key_before] == route_data[expected_key_change]
-    
-    # destroy database when test case ends
-    storage._destroy_database(database_connection)
 
-def test_added_route_detection(test_db: sqlite3.Connection):
+
+def test_added_route_detection(test_db):
     timestamp1 = '2024-05-09_08:30'
     timestamp2 = '2024-05-09_09:15' 
 
@@ -258,11 +254,11 @@ def test_added_route_detection(test_db: sqlite3.Connection):
     service = "SERVICE1"
 
     # Save data
-    storage.save_routes(timestamp1, initial_routes, database_connection =test_db)
-    storage.save_routes(timestamp2, initial_routes + [new_route], database_connection =test_db) 
+    storage.save_routes(timestamp1, initial_routes,)
+    storage.save_routes(timestamp2, initial_routes + [new_route],) 
 
     # Comparison
-    result = storage.get_added_deleted_routes(hostname, service, timestamp1, timestamp2, database_connection =test_db)
+    result = storage.get_added_deleted_routes(hostname, service, timestamp1, timestamp2,)
 
     assert len(result['added']) == 1 
     assert result['added'][0]["route"] == new_route["route"]
@@ -312,27 +308,21 @@ def test_added_route_detection(test_db: sqlite3.Connection):
         # Add more test cases with different routes being removed
     ]
 )
-def test_removed_route_detection(initial_routes, later_routes, removed_route):
+def test_removed_route_detection(initial_routes, later_routes, removed_route, test_db):
     timestamp1 = '2024-05-09_08:30'
     timestamp2 = '2024-05-09_09:15' 
     hostname = "HOSTNAME1"
     service = "SERVICE1"
 
-    # Initialize database
-    database_connection = storage._initialize_database(":memory:")
-
     # Save data
-    storage.save_routes(timestamp1, initial_routes, database_connection=database_connection)
-    storage.save_routes(timestamp2, later_routes, database_connection=database_connection) 
+    storage.save_routes(timestamp1, initial_routes,)
+    storage.save_routes(timestamp2, later_routes,) 
 
     # Comparison
-    result = storage.get_added_deleted_routes(hostname, service, timestamp1, timestamp2, database_connection=database_connection)
+    result = storage.get_added_deleted_routes(hostname, service, timestamp1, timestamp2,)
 
-    assert len(result['removed']) == 1 
-    assert result['removed'][0]["route"] == removed_route["route"]
-
-    # destroy database when test case ends
-    storage._destroy_database(database_connection)
+    assert len(result['deleted']) == 1 
+    assert result['deleted'][0]["route"] == removed_route["route"]
 
 
 def generate_test_route(route_prefix):
@@ -362,12 +352,11 @@ def generate_unique_routes_list(num_routes):
 
 
 @pytest.mark.parametrize("num_routes", [10000, ])
-def test_large_scale_comparison(num_routes):
+def test_large_scale_comparison(num_routes, test_db):
     timestamp1 = "2024-05-09_08:00"
     timestamp2 = "2024-05-09_08:15"
     hostname = "HOSTNAME1"
     service = "SERVICE1"
-    database_connection = storage._initialize_database(":memory:")
 
     # Generate routes 
     initial_routes = generate_unique_routes_list(num_routes)
@@ -381,24 +370,24 @@ def test_large_scale_comparison(num_routes):
 
     # Store routes
     start_save_time1 = time.time()
-    storage.save_routes(timestamp1, initial_routes, database_connection=database_connection)
+    storage.save_routes(timestamp1, initial_routes,)
     save_routes_time1 = time.time() - start_save_time1
 
     start_save_time2 = time.time()
-    storage.save_routes(timestamp2, later_routes, database_connection=database_connection)
+    storage.save_routes(timestamp2, later_routes,)
     save_routes_time2 = time.time() - start_save_time2
 
     # Benchmarking
     start_time = time.time()
-    result = storage.get_added_deleted_routes(hostname, service, timestamp1, timestamp2, database_connection=database_connection)
+    result = storage.get_added_deleted_routes(hostname, service, timestamp1, timestamp2,)
     compare_time = time.time() - start_time
 
     start_changed = time.time()
-    changed_results = storage.changed_routes(hostname, service, timestamp1, timestamp2, database_connection=database_connection)
+    changed_results = storage.changed_routes(hostname, service, timestamp1, timestamp2,)
     changed_time = time.time() - start_changed
 
     # Assertions
-    assert len(result['removed']) == 10  
+    assert len(result['deleted']) == 10  
     assert len(result['added']) == 10
     assert len(changed_results['changed']) == 3
 
@@ -407,10 +396,6 @@ def test_large_scale_comparison(num_routes):
     print(f"Total save_routes 2nd time: {save_routes_time2:.4f} seconds")
     print(f"Total compare_routes time: {compare_time:.4f} seconds")
     print(f"Total changed_routes time: {changed_time:.4f} seconds")
-
-    # destroy database when test case ends
-    storage._destroy_database(database_connection)
-
 
 
 @pytest.mark.parametrize(
@@ -456,7 +441,7 @@ def test_large_scale_comparison(num_routes):
         # Add more test cases with different routes being removed
     ]
 )
-def test_get_list_of_timestamps(routes):
+def test_get_list_of_timestamps(routes, test_db):
     """
     Test storage.get_list_of_timestamps
     save routes to the database with different timestamps
@@ -469,12 +454,9 @@ def test_get_list_of_timestamps(routes):
         "2024-05-08_16:22",
         "2024-05-08_16:23",
     ]
-    # Initialize the database
-    database_connection = storage._initialize_database(":memory:")
-
-    storage.save_routes(timestamps[0], routes, database_connection=database_connection)
-    storage.save_routes(timestamps[1], routes, database_connection=database_connection)
-    storage.save_routes(timestamps[2], routes, database_connection=database_connection)
+    storage.save_routes(timestamps[0], routes,)
+    storage.save_routes(timestamps[1], routes,)
+    storage.save_routes(timestamps[2], routes,)
     
     expected_timestamps = [("HOSTNAME1","SERVICE1","2024-05-08_16:23",), 
                            ("HOSTNAME2","SERVICE1","2024-05-08_16:23",), 
@@ -484,12 +466,9 @@ def test_get_list_of_timestamps(routes):
                            ("HOSTNAME2","SERVICE1","2024-05-08_16:21",),
                         ]
     # Retrieve the list of timestamps
-    retrieved_timestamps = storage.get_list_of_timestamps(database_connection=database_connection)
+    retrieved_timestamps = storage.get_list_of_timestamps()
 
     assert retrieved_timestamps == expected_timestamps
-
-    # Destroy database when test case ends
-    storage._destroy_database(database_connection)
 
 
 
@@ -536,7 +515,7 @@ def test_get_list_of_timestamps(routes):
         # Add more test cases with different routes being removed
     ]
 )
-def test_get_latest_timestamps(routes):
+def test_get_latest_timestamps(routes, test_db):
     """
     Test storage.get_latest_timestamps
     save routes to the database with different timestamps
@@ -550,22 +529,22 @@ def test_get_latest_timestamps(routes):
         "2024-05-08_16:23",
     ]
     # Initialize the database
-    database_connection = storage._initialize_database(":memory:")
+    # database_connection = storage._initialize_database(":memory:")
 
-    storage.save_routes(timestamps[0], routes, database_connection=database_connection)
-    storage.save_routes(timestamps[1], routes, database_connection=database_connection)
-    storage.save_routes(timestamps[2], routes, database_connection=database_connection)
+    storage.save_routes(timestamps[0], routes,)
+    storage.save_routes(timestamps[1], routes,)
+    storage.save_routes(timestamps[2], routes,)
     
     expected_timestamp1 = "2024-05-08_16:23" 
     expected_timestamp2 = "2024-05-08_16:22"
                            
     # Retrieve the list of timestamps
-    retrieved_timestamps = storage.get_latest_timestamps("HOSTNAME1","SERVICE1", database_connection=database_connection)
+    retrieved_timestamps = storage.get_latest_timestamps("HOSTNAME1","SERVICE1",)
 
     assert retrieved_timestamps == (expected_timestamp1, expected_timestamp2)
 
     # Destroy database when test case ends
-    storage._destroy_database(database_connection)
+    # storage._destroy_database(database_connection)
 
 
 
@@ -662,21 +641,16 @@ ROUTES_TEST = [
     ]   
 )
 
-def test_get_routes_when_more_than_one_hostname_and_service(routes, hostname, service, timestamp_to_save, timestamp_to_get, expected_number_of_routes, expected_routes):
+def test_get_routes_when_more_than_one_hostname_and_service(routes, hostname, service, timestamp_to_save, timestamp_to_get, expected_number_of_routes, expected_routes, test_db):
     """
     Test storage.get_routes under diffenrent conditions when more than one host is saved
     """
-    # Initialize the database
-    database_connection = storage._initialize_database(":memory:")
 
-    storage.save_routes(timestamp_to_save, routes, database_connection=database_connection)
+    storage.save_routes(timestamp_to_save, routes,)
 
     # Retrieve the routes
-    retrieved_routes = storage.get_routes(hostname, service, timestamp_to_get, database_connection=database_connection)
+    retrieved_routes = storage.get_routes(hostname, service, timestamp_to_get,)
 
     assert len(retrieved_routes) == expected_number_of_routes
     assert [route_item["route"] for route_item in retrieved_routes ].sort() == expected_routes.sort()
 
-
-    # Destroy database when test case ends
-    storage._destroy_database(database_connection)

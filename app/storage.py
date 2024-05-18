@@ -73,11 +73,23 @@ class DatabaseConnection:
     def reset_instance():
         DatabaseConnection.__instance = None
 
+    @staticmethod
+    def destroy_database():
+        with DatabaseConnection.get_instance().get_connection() as database_connection:
+            if database_connection is not None:
+                cursor = database_connection.cursor()
+                cursor.execute("DROP TABLE IF EXISTS igp_routes")
+                database_connection.commit()
+        DatabaseConnection.__instance = None
+
 # Function to initialize the database
 def initialize_database(db_url: str = database_url):
     """Creates necessary tables if they don't exist"""
+    logger.debug("initialize_database")
     logger.debug(f"Initializing database at {db_url}")
+    global database_url
     database_url = db_url
+    current_url = db_url
     with DatabaseConnection.get_instance().get_connection() as database_connection:
         database_connection = sqlite3.connect(db_url)
         cursor = database_connection.cursor()
@@ -103,14 +115,6 @@ def initialize_database(db_url: str = database_url):
         database_connection.commit()
     return
 
-
-
-def _destroy_database(url: str = database_url):
-    with DatabaseConnection.get_instance().get_connection() as database_connection:
-        cursor = database_connection.cursor()
-        cursor.execute("DROP TABLE IF EXISTS igp_routes")
-        database_connection.commit()
-        database_connection.close()
 
 
 def save_routes(
@@ -217,10 +221,10 @@ def get_added_deleted_routes(
 ) -> dict:
     logger.debug("get_added_deleted_routes")
     logger.debug(f"Getting added and deleted routes for {hostname} {service} {timestamp1} {timestamp2}")
-    routes1 = get_routes(hostname, service, timestamp1, url)
+    routes1 = get_routes(hostname, service, timestamp1,)
     if routes1 is not None:
         logger.debug(f"Got routes for {hostname} {service} {timestamp1} first route: {routes1[0]}")
-    routes2 = get_routes(hostname, service, timestamp2, url)
+    routes2 = get_routes(hostname, service, timestamp2,)
     if routes2 is not None:
         logger.debug(f"Got routes for {hostname} {service} {timestamp1} first route: {routes2[0]}")
 
