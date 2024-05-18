@@ -40,7 +40,7 @@ import datetime
 import logging
 logger = logging.getLogger(__name__)  # Get a logger for the 'storage' module
 
-default_database_url = "routes.sqlite3"
+database_url = "routes.sqlite3"
 
 class DatabaseConnection:
     __instance = None  
@@ -56,7 +56,7 @@ class DatabaseConnection:
     def get_instance():
         """ Static access method. """
         if DatabaseConnection.__instance is None:
-            DatabaseConnection(default_database_url)
+            DatabaseConnection(database_url)
         return DatabaseConnection.__instance
 
     def get_connection(self):
@@ -65,26 +65,22 @@ class DatabaseConnection:
 
     # New methods for testing
     @staticmethod
-    def set_database_url_for_testing(url):
-        global default_database_url
-        default_database_url = url
+    def set_database_url(url):
+        global database_url
+        database_url = url
 
     @staticmethod
     def reset_instance():
         DatabaseConnection.__instance = None
 
-def get_connection(db_url: str = default_database_url):
-    """Returns a connection to the database"""
-    return sqlite3.connect(db_url)
-
 # Function to initialize the database
-def initialize_database(db_url: str = default_database_url):
+def initialize_database(db_url: str = database_url):
     """Creates necessary tables if they don't exist"""
     logger.debug(f"Initializing database at {db_url}")
-    default_database_url = db_url
-    with get_connection(db_url) as conn:
-        conn = sqlite3.connect(db_url)
-        cursor = conn.cursor()
+    database_url = db_url
+    with DatabaseConnection.get_instance().get_connection() as database_connection:
+        database_connection = sqlite3.connect(db_url)
+        cursor = database_connection.cursor()
         cursor.execute(
             """ 
             CREATE TABLE IF NOT EXISTS igp_routes (
@@ -104,15 +100,13 @@ def initialize_database(db_url: str = default_database_url):
             )
         """
         )
-        conn.commit()
-    return default_database_url
+        database_connection.commit()
+    return
 
 
 
-def _destroy_database(url: str = default_database_url):
-    with get_connection(url) as database_connection:
-        if database_connection is None:
-            database_connection = sqlite3.connect(default_database_url)
+def _destroy_database(url: str = database_url):
+    with DatabaseConnection.get_instance().get_connection() as database_connection:
         cursor = database_connection.cursor()
         cursor.execute("DROP TABLE IF EXISTS igp_routes")
         database_connection.commit()
@@ -120,11 +114,11 @@ def _destroy_database(url: str = default_database_url):
 
 
 def save_routes(
-    timestamp: str, routes: list, url: str = default_database_url
+    timestamp: str, routes: list,
 ) -> None:
     """Stores routes with a given timestamp in the SQLite database"""
-    # breakpoint()
-    with get_connection(url) as database_connection:
+    logger.debug("save_routes")
+    with DatabaseConnection.get_instance().get_connection() as database_connection:
         cursor = database_connection.cursor()
         logger.debug(f"Saving routes with timestamp {timestamp}")
         logger.debug(f"first route: {routes[0]}")
@@ -155,9 +149,10 @@ def save_routes(
 
 
 
-def get_routes(hostname:str, service:str, timestamp: str, url: str = default_database_url) -> list:
+def get_routes(hostname:str, service:str, timestamp: str, ) -> list:
     """Retrieves routes for a hostname at a specific timestamp from the SQLite database"""
-    with get_connection(url) as database_connection:
+    logger.debug("get_routes")
+    with DatabaseConnection.get_instance().get_connection() as database_connection:
         cursor = database_connection.cursor()
         try:
             cursor.execute("SELECT * FROM igp_routes WHERE hostname=? AND service=? AND timestamp=?", (hostname, service, timestamp,))
@@ -175,19 +170,16 @@ def get_routes(hostname:str, service:str, timestamp: str, url: str = default_dat
 def remove_routes(
     hostname: str,
     timestamp: str,
-    url: str = default_database_url,
 ) -> None:
     """
     Remove routes from the database quering hostname and timestamp
     """
-    with get_connection(url) as database_connection:
+    logger.debug("remove_routes")
+    with DatabaseConnection.get_instance().get_connection() as database_connection:
         cursor = database_connection.cursor()
         rows_deleted = cursor.execute("DELETE FROM igp_routes WHERE hostname=? AND timestamp=?", (hostname, timestamp,)).rowcount
         database_connection.commit()
     return rows_deleted
-
-
-
 
 
 def compare_routes(
@@ -196,11 +188,10 @@ def compare_routes(
     timestamp1: datetime,
     timestamp2: datetime,
     fields: list = ["route"],
-    url: str = default_database_url,
 ) -> dict:
-
-    added_deleted_routes_dict = get_added_deleted_routes(hostname, service, timestamp1, timestamp2, url=url)
-    changed_routes_dict = changed_routes(hostname, service, timestamp1, timestamp2, url)
+    logger.debug("compare_routes")
+    added_deleted_routes_dict = get_added_deleted_routes(hostname, service, timestamp1, timestamp2,)
+    changed_routes_dict = changed_routes(hostname, service, timestamp1, timestamp2,)
     if added_deleted_routes_dict is not None:
         logger.debug(f"Added and deleted routes: {added_deleted_routes_dict}")
     else:
@@ -223,9 +214,8 @@ def get_added_deleted_routes(
     timestamp1: datetime,
     timestamp2: datetime,
     fields: list = ["hostname", "service", "route"],
-    url: str = default_database_url,
 ) -> dict:
-    # breakpoint()
+    logger.debug("get_added_deleted_routes")
     logger.debug(f"Getting added and deleted routes for {hostname} {service} {timestamp1} {timestamp2}")
     routes1 = get_routes(hostname, service, timestamp1, url)
     if routes1 is not None:
@@ -276,15 +266,15 @@ def changed_routes(
     timestamp1: datetime,
     timestamp2: datetime,
     fields: list = ["route"],
-    url: str = default_database_url,
 ) -> dict:
+    logger.debug("changed_routes")
     logger.debug(f"Getting changed routes for {hostname} {service} {timestamp1} {timestamp2}")
-    routes1 = get_routes(hostname, service, timestamp1, url)
-    routes2 = get_routes(hostname, service, timestamp2, url)
+    routes1 = get_routes(hostname, service, timestamp1,)
+    routes2 = get_routes(hostname, service, timestamp2,)
 
     if routes1 is None or routes2 is None:
         return None  # Or raise an exception if timestamps are invalid
-    with get_connection(url) as database_connection:
+    with DatabaseConnection.get_instance().get_connection() as database_connection:
         cursor = database_connection.cursor()
         try:
             cursor.execute(
@@ -318,21 +308,20 @@ def changed_routes(
             logger.error(f"Error getting changed routes: {e}")
             raise
 
-
     return {"changed": changed_routes}
 
-def get_list_of_timestamps(hostname:str=None, url: str = default_database_url) -> list:
+def get_list_of_timestamps(hostname:str=None,) -> list:
     """
     Retrieves a list of timestamps for a given hostname from the database.
     If hostname is None, generate the list for all hostnames in the database. Order the results from newest to oldest.
     Returns a list of unique hostname,timestamp tuples.
     """
-    
+    logger.debug("get_list_of_timestamps")
     if hostname:
         logger.debug(f"Getting list of timestamps for {hostname}") 
     else:
         logger.debug("Getting list of timestamps for all hostnames") 
-    with get_connection(url) as database_connection:
+    with DatabaseConnection.get_instance().get_connection() as database_connection:
         cursor = database_connection.cursor()
         if hostname is None:
             cursor.execute("SELECT DISTINCT hostname, service, timestamp FROM igp_routes ORDER BY timestamp DESC")
@@ -344,7 +333,7 @@ def get_list_of_timestamps(hostname:str=None, url: str = default_database_url) -
     return results
 
 
-def get_latest_timestamps(hostname: str, service:str, url: str = default_database_url) -> tuple:
+def get_latest_timestamps(hostname: str, service:str,) -> tuple:
     """
     Retrieves the two most recent timestamps for a given hostname and service combination from the database.
 
@@ -356,9 +345,9 @@ def get_latest_timestamps(hostname: str, service:str, url: str = default_databas
     Returns:
         A tuple containing the two most recent timestamps, or None if no matching timestamps are found.
     """
-    
-    logging.debug(f"Getting latest timestamps for {hostname} and {service}")
-    with get_connection(url) as database_connection:
+    logger.debug("get_latest_timestamps")
+    logger.debug(f"Getting latest timestamps for {hostname} and {service}")
+    with DatabaseConnection.get_instance().get_connection() as database_connection:
         cursor = database_connection.cursor()
         cursor.execute(
             """
