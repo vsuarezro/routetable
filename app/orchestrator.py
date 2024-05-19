@@ -16,12 +16,12 @@ import network_interface
 def list_timestamps(hostname: str = None):
     logger.info("list_timestamps")
     if hostname:
-        return storage.get_list_of_timestamps(hostname, url=database_url)
-    return storage.get_list_of_timestamps(url=database_url)
+        return storage.get_list_of_timestamps(hostname, )
+    return storage.get_list_of_timestamps()
 
 def remove_routes_for_device(hostname: str, timestamp: str):
     logger.info("remove_route")
-    rows_deleted = storage.remove_routes(hostname, timestamp, url=database_url)
+    rows_deleted = storage.remove_routes(hostname, timestamp, )
     return rows_deleted
 
 def fetch_single_device(ip_address: str):
@@ -47,7 +47,7 @@ def load_routes_from_file(filename: str, hostname: str, timestamp: str, vendor: 
     content = file_operations.load_file_content(filename)
     routes = netparser.parse(vendor, content, hostname, timestamp)
     logger.info(f"Loaded {len(routes)} routes from {filename}")
-    storage.save_routes(timestamp, routes, url=database_url)
+    storage.save_routes(timestamp, routes, )
     logger.info(f"Saved {len(routes)} routes to the database")
 
 
@@ -62,7 +62,7 @@ def compare_routes(hostname: str, service: str, timestamp1: str, timestamp2: str
     """
     logger.info("compare_routes")
     return storage.compare_routes(
-        hostname, service, timestamp1, timestamp2, url=database_url
+        hostname, service, timestamp1, timestamp2, 
     )
 
 
