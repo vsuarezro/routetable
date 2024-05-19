@@ -389,6 +389,7 @@ def test_large_scale_comparison(num_routes, test_db):
     # Assertions
     assert len(result['deleted']) == 10  
     assert len(result['added']) == 10
+    print(changed_results['changed'])
     assert len(changed_results['changed']) == 3
 
     # Performance Reporting

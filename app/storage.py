@@ -278,41 +278,75 @@ def changed_routes(
 
     if routes1 is None or routes2 is None:
         return None  # Or raise an exception if timestamps are invalid
-    with DatabaseConnection.get_instance().get_connection() as database_connection:
-        cursor = database_connection.cursor()
-        try:
-            cursor.execute(
-                """
-                SELECT 
-                    r1.route, 
-                    r1.next_hop AS next_hop_before, r2.next_hop AS next_hop_after,
-                    r1.metric AS metric_before, r2.metric AS metric_after,
-                    r1.route_protocol AS route_protocol_before, r2.route_protocol AS route_protocol_after
-                FROM 
-                    igp_routes r1
-                INNER JOIN 
-                    igp_routes r2 
-                ON 
-                    r1.route = r2.route 
-                WHERE 
-                    r1.hostname = ? AND r1.service = ? AND r1.timestamp = ? AND 
-                    r2.hostname = ? AND r2.service = ? AND r2.timestamp = ? AND 
-                    (r1.next_hop != r2.next_hop OR 
-                    r1.metric != r2.metric OR 
-                    r1.route_protocol != r2.route_protocol)
-            """,
-                (hostname, service, timestamp1, hostname, service, timestamp2),
-            )
-            changed_routes = [
-                dict(zip([column[0] for column in cursor.description], row))
-                for row in cursor.fetchall()
-            ]
 
-        except Exception as e:
-            logger.error(f"Error getting changed routes: {e}")
-            raise
+    # Group routes by prefix
+    routes1_by_route = {}
+    routes2_by_route = {}
+    for route in routes1:
+        routes1_by_route.setdefault(route["route"], []).append(route)
+    for route in routes2:
+        routes2_by_route.setdefault(route["route"], []).append(route)
+
+    changed_routes = []
+    for route, routes1_entries in routes1_by_route.items():
+        routes2_entries = routes2_by_route.get(route, [])
+        # Skip on deleted routes, if the result is an empty list, 
+        # it means routes2_by_route.get(route) failed, and so the route
+        # exists on routes1 (first timestamp) but not in the second
+        if routes2_entries == []:
+            continue
+
+        # Check for differences in the set of next hops and metrics
+        # by first getting a set of all meaningful keys 
+        # for the entries of the route in both timestamps
+        next_hops1 = set(entry["next_hop"] for entry in routes1_entries)
+        next_hops2 = set(entry["next_hop"] for entry in routes2_entries)
+        metrics1 = set(entry["metric"] for entry in routes1_entries)
+        metrics2 = set(entry["metric"] for entry in routes2_entries)
+        protocols1 = set(entry["route_protocol"] for entry in routes1_entries)
+        protocols2 = set(entry["route_protocol"] for entry in routes2_entries)
+
+        if next_hops1 != next_hops2 or metrics1 != metrics2 or protocols1 != protocols2:
+            # Detect changes in the relevant fields
+            # search for a r2_match that means all entries between r1 and r2 are equal
+            # searches for an r2 (different r2) which has any of the meaningful keys different to r1
+            # fill the fields with r1 and r2 values for first timestamp (before) and second timestamp (after)
+            for r1 in routes1_entries:
+                r2_match = next(
+                    (
+                        r2
+                        for r2 in routes2_entries
+                        if r2["next_hop"] == r1["next_hop"]
+                        and r2["metric"] == r1["metric"]
+                        and r2["route_protocol"] == r1["route_protocol"]
+                    ),
+                    None,
+                )
+                r2 = next(
+                    (
+                        r2
+                        for r2 in routes2_entries
+                        if r2["next_hop"] != r1["next_hop"]
+                        or r2["metric"] != r1["metric"]
+                        or r2["route_protocol"] != r1["route_protocol"]
+                    ),
+                    None,
+                )
+
+                if not r2_match:
+                    changed_route = {
+                        "route": route,
+                        "next_hop_before": r1["next_hop"],
+                        "next_hop_after": r2.get("next_hop") if r2 else None,
+                        "metric_before": r1["metric"],
+                        "metric_after": r2.get("metric") if r2 else None,
+                        "route_protocol_before": r1["route_protocol"],
+                        "route_protocol_after": r2.get("route_protocol") if r2 else None,
+                    }
+                    changed_routes.append(changed_route)
 
     return {"changed": changed_routes}
+
 
 def get_list_of_timestamps(hostname:str=None,) -> list:
     """
