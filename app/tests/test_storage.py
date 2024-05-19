@@ -528,8 +528,6 @@ def test_get_latest_timestamps(routes, test_db):
         "2024-05-08_16:22",
         "2024-05-08_16:23",
     ]
-    # Initialize the database
-    # database_connection = storage._initialize_database(":memory:")
 
     storage.save_routes(timestamps[0], routes,)
     storage.save_routes(timestamps[1], routes,)
@@ -654,3 +652,66 @@ def test_get_routes_when_more_than_one_hostname_and_service(routes, hostname, se
     assert len(retrieved_routes) == expected_number_of_routes
     assert [route_item["route"] for route_item in retrieved_routes ].sort() == expected_routes.sort()
 
+
+
+SAME_ROUTE_MULTIPLE_NEXT_HOPS_TEST = [
+                {
+                    "hostname": "HOSTNAME1", "service": "SERVICE1",
+                    "route": "10.10.10.10/32", "flags": "B",
+                    "route_type": "Remote", "route_protocol": "ISIS",
+                    "age": "10h49m31s", "preference": "170",
+                    "next_hop": "1.1.1.1", "interface_next_hop": "tunneled:SR-ISIS:530001",
+                    "metric": "100"
+                },
+                {
+                    "hostname": "HOSTNAME1","service": "SERVICE1",
+                    "route": "10.10.10.10/32", "flags": "L",
+                    "route_type": "Remote", "route_protocol": "ISIS",
+                    "age": "00h08m44s", "preference": "18",
+                    "next_hop": "2.2.2.2", "interface_next_hop": "tunneled:SR-ISIS:530001",
+                    "metric": "100"
+                },
+                {
+                    "hostname": "HOSTNAME1", "service": "SERVICE1",
+                    "route": "10.10.10.10/32", "flags": "L",
+                    "route_type": "Remote", "route_protocol": "ISIS",
+                    "age": "00h08m44s", "preference": "18",
+                    "next_hop": "3.3.3.3", "interface_next_hop": "tunneled:SR-ISIS:530001",
+                    "metric": "100"
+                },
+                {
+                    "hostname": "HOSTNAME1", "service": "SERVICE1",
+                    "route": "10.10.10.10/32", "flags": "L",
+                    "route_type": "Remote", "route_protocol": "ISIS",
+                    "age": "00h08m44s", "preference": "18",
+                    "next_hop": "4.4.4.4", "interface_next_hop": "tunneled:SR-ISIS:530001",
+                    "metric": "100"
+                }
+            ]
+
+
+@pytest.mark.parametrize(
+    "routes_data, timestamp1, timestamp2,hostname, service",
+    [
+        # Test case 1: next_hop change 
+        (
+            SAME_ROUTE_MULTIPLE_NEXT_HOPS_TEST, 
+            '2024-05-08_16:20',
+            '2024-05-08_16:35',
+            "HOSTNAME1",
+            "SERVICE1",
+
+        ),  
+    ]
+)
+def test_changed_route_detection_with_same_route_and_multiple_nexthops(routes_data, timestamp1, timestamp2, hostname, service, test_db):
+
+    # Save the routes for both timestamps (initially the same)
+    storage.save_routes(timestamp1, routes_data, ) 
+    storage.save_routes(timestamp2, routes_data, ) 
+
+    # Perform comparison
+    comparison_result = storage.changed_routes(hostname, service, timestamp1, timestamp2, )
+    
+    # Assertions
+    assert len(comparison_result['changed']) == 0 
