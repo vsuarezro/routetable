@@ -47,7 +47,8 @@ show router [router_id] route-table
 
 """
 
-interface_name = pp.Regex(r"[\w\d\-\/ ]{1,60}")
+interface_name = pp.Regex(r"[\w\d\-\/\[\]\*\:\" ]{1,60}")
+# local_vrf_literal = pp.Literal("LOCAL VRF")
 tunneled_bgp = pp.Literal("tunneled:BGP")
 tunneled_ldc = pp.Literal("tunneled")
 tunneled_isis_sr = pp.Combine(pp.Literal("tunneled:SR-ISIS:") + digits)
