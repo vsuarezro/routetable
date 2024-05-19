@@ -25,7 +25,7 @@ def validate_timestamp(timestamp):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Networks tools. Compare and Screape")
+    parser = argparse.ArgumentParser(description="Networks tools. Compare and Scrape")
     # main options, valid for more than one command
     parser.add_argument(
         "-i",
