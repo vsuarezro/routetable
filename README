@@ -1,14 +1,17 @@
 +Networks tools. Compare and Scrape+
 
-To use / install:
+_Install requirements:_
 
-pip install -r app/requirements.txt
+pip install --requirement app/requirements.txt
+
+_To use:_
+
+python app/cli.py
 
 Main commands:
     scrape              Scrape device configurations
     compare             Compare outputs
     checkpoint          Save a route table from device or file
-
 
 global options:
   -i INVENTORY_FILE, --inventory-file INVENTORY_FILE
