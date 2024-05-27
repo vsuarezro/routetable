@@ -1,0 +1,42 @@
+Networks tools. Compare and Scrape
+
+To use / install:
+
+pip install -r app/requirements.txt
+
+Main commands:
+    scrape              Scrape device configurations
+    compare             Compare outputs
+    checkpoint          Save a route table from device or file
+
+
+global options:
+  -i INVENTORY_FILE, --inventory-file INVENTORY_FILE
+                        YAML file with device information
+  -c COMMANDS_FILE, --commands-file COMMANDS_FILE
+                        YAML file with commands to execute
+  -f DEVICE_FILTER, --device-filter DEVICE_FILTER
+                        Filter devices (hostname or role)
+  --table {route,bgp}   Select route-table or bgp-table to compare. Defaults to route
+  -q, --quiet           Suppress output except critical errors
+
+Scrape options:
+  --scrape-output {per-device,per-command,single-file}
+                        Select the number of files to create where to save the outputs, per-device saves a single file per device, per-command saves a file per combination of
+                        hostname+command and single-file saves a single file with all the outputs. Default is per-device
+  --dry-run             Simulate scrape without connecting
+
+
+Checkpoint options:
+  --load-file FILENAME HOSTNAME TIMESTAMP VENDOR
+                        Load routes from a file with a timestamp
+  --fetch               Fetch routes from a device (IP address) or a file of devices
+  --remove HOSTNAME TIMESTAMP
+                        Remove specific compare checkpoints from the database
+
+Compare options:
+  --compare-output {text,csv,yaml,json,xml,table}
+                        Select output format (for compare command)
+  --query HOSTNAME SERVICE TIMESTAMP1 TIMESTAMP2
+                        Compare routes between two timestamps
+  --list [HOSTNAME]     List available timestamps (optionally filter by hostname)
